@@ -1,0 +1,31 @@
+# eclipse
+bin
+*.launch
+.settings
+.metadata
+.classpath
+.project
+
+# idea
+out
+*.ipr
+*.iws
+*.iml
+.idea
+
+# gradle
+build
+.gradle
+
+# other
+eclipse
+run
+run-data
+
+# Files from Forge MDK
+forge*changelog.txt
+
+# Redistributed mod jars — copied read-only from the modpack's mods folder for compileOnly
+# dev use. Never commit these; anyone rebuilding this repo re-copies them from their own
+# modpack install (see README.md).
+libs/*.jar
