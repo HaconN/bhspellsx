@@ -1,4 +1,4 @@
-package net.offkung.bhspells.spells.ground;
+package net.offkung.bhspellsx.spells.ground;
 
 import io.redspace.ironsspellbooks.api.config.DefaultConfig;
 import io.redspace.ironsspellbooks.api.magic.MagicData;

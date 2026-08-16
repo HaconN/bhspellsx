@@ -38,19 +38,36 @@ Confirmed abstract methods on `AbstractSpell` (3.16.1): `getSpellResource()`,
 the spell's constructor — not part of `DefaultConfig`. `DefaultConfig` build chain:
 `new DefaultConfig().setMinRarity(...).setSchoolResource(...).setMaxLevel(...).setCooldownSeconds(...).build()`.
 
-## Two-package merge convention
+## Package convention: everything lives under `net.offkung.bhspellsx`
 
-- `net/offkung/bhspellsx/` — bootstrap-only. `@Mod` entry point, client event bus
-  subscriber, the local `DeferredRegister` (`BHXSpellRegistry`). **Deleted entirely** at
-  merge time.
-- `net/offkung/bhspells/` — portable content (spell classes, and in later phases entities,
-  particles, etc.). Written as if it already lives inside the real `bhspells` mod. **Copied
-  verbatim** into the real bhspells source tree at merge time; only the registry wiring and
-  namespace strings change (see `MERGE.md`).
+**All source lives under `net.offkung.bhspellsx`. Subpackage names mirror `bhspells`
+exactly.** Portable classes (`spells/`, `entity/`, `effect/`, `event/`, `client/particle/`,
+etc.) are merge targets — written as if they already lived inside the real `bhspells` mod,
+modulo the namespace. The mod entrypoint (`BHSpellsX`, `BHSpellsXClient`) and the
+`registry/` package are throwaway wiring, deleted at merge time.
 
-When adding new content, always ask "does this belong in the bootstrap, or is it portable
-spell content?" before picking a package. When in doubt, portable — the bootstrap package
-should only ever contain wiring.
+**NEVER declare a package under `net.offkung.bhspells`** (no trailing `x`). JPMS forbids
+two modules exporting the same package — `bhspellsx` and the real `bhspells` mod loaded
+side by side in the same modpack, both declaring `net.offkung.bhspells.*`, crashes the game
+at module resolution *before mod loading even starts*:
+
+```
+java.lang.module.ResolutionException: Modules bhspellsx and bhspells
+export package net.offkung.bhspells.spells.ground to module transition
+```
+
+This already happened once (Phase 0 originally put `EmbracingBosomSpell` under
+`net.offkung.bhspells.spells.ground`, colliding with the real bhspells jar present in the
+pack) and was fixed by moving everything to `net.offkung.bhspellsx.*`. Do not reintroduce
+it. When adding new content, always ask "does this belong in the bootstrap (`BHSpellsX`,
+`BHSpellsXClient`, `registry/`), or is it portable content bound for the merge?" before
+picking a subpackage — but either way it starts with `net.offkung.bhspellsx`, never
+`net.offkung.bhspells`. The merge step (see `MERGE.md`) is what performs the
+`bhspellsx` → `bhspells` rename, and only there.
+
+Resource-location strings (registry ids, hardcoded school references) are unaffected by
+this — `bhspellsx:embracing_bosom` and `bhspells:ground` are fine as-is; this rule is about
+Java package declarations only.
 
 ## Testing loop — there is no dev-environment launch
 

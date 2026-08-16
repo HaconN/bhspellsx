@@ -9,9 +9,10 @@ import net.offkung.bhspellsx.registry.BHXSpellRegistry;
 import org.slf4j.Logger;
 
 /**
- * Phase 0 bootstrap mod. Everything in this package is throwaway scaffolding that gets
- * deleted once net.offkung.bhspells.* content is folded into the real bhspells mod
- * (see MERGE.md at the repo root) — do not build on top of this class long-term.
+ * Phase 0 bootstrap mod. This entrypoint and the registry/ package are throwaway
+ * scaffolding, deleted once the portable subpackages under net.offkung.bhspellsx are
+ * folded into the real bhspells mod (see MERGE.md at the repo root) — do not build on top
+ * of this class long-term.
  */
 @Mod("bhspellsx")
 public class BHSpellsX {
