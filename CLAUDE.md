@@ -116,11 +116,41 @@ above doesn't apply to them. Pulled read-only from the modpack's own `mods/` fol
 from CurseMaven, per project policy for these three. They're `.gitignore`d; see `README.md`
 for how to repopulate `libs/` on a fresh checkout.
 
-`mods.toml` only hard-depends on `irons_spellbooks` and `irons_lib`. geckolib, traveloptics,
-and bhspells are on the compile classpath but are **not** runtime dependencies — nothing in
-this repo calls into them beyond a single hardcoded school `ResourceLocation` string (see
-`EmbracingBosomSpell` — deliberately not a compile-time dependency on `bhspells` itself,
-resolved only at real runtime since bhspells is always present in the live modpack).
+`mods.toml` hard-depends on `irons_spellbooks`, `irons_lib`, and (as of Phase 2B)
+`traveloptics` — `EmbracingBosomAoe` calls `AdvancedCylinderParticleManager` at runtime, so
+it stopped being compile-classpath-only. geckolib and bhspells are still on the compile
+classpath but **not** runtime dependencies — nothing in this repo calls into them beyond a
+single hardcoded school `ResourceLocation` string (see `EmbracingBosomSpell` — deliberately
+not a compile-time dependency on `bhspells` itself, resolved only at real runtime since
+bhspells is always present in the live modpack).
+
+## Traveloptics particle managers (Phase 2B)
+
+`com.gametechbc.traveloptics.api.particle.AdvancedCylinderParticleManager` /
+`AdvancedSphereParticleManager` etc. are misleadingly named — despite "Manager", they're
+stateless static utility classes (`public abstract class` with only `static` methods, no
+persistent state, no vanilla inheritance at all). A single call is one immediate one-shot
+burst; there's no built-in animation. House style (see bhspells' `EternalPurificationSpell`)
+gets "continuous" effects by calling the static method every tick/interval from your own
+tick loop, and gets animated parameters (e.g. a shrinking radius) by calling it repeatedly
+across several ticks with a manually interpolated value — `EmbracingBosomAoe`'s cast-in
+converge burst does exactly this over 8 ticks.
+
+These calls are **server-side only** — they early-return on `level.isClientSide` and
+delegate to irons_spellbooks' `MagicManager.spawnParticles`, which iterates all players and
+calls `ServerLevel#sendParticles` per player. Call them from server-side tick code, same as
+our own earlier `ServerLevel#sendParticles` placeholder VFX.
+
+`particleType` is typed as the `ParticleOptions` interface, not a fixed `ParticleTypes`
+enum — any implementation works, confirmed via bhspells passing `BlockParticleOption`. This
+means vanilla's `DustParticleOptions(Vector3f color, float scale)` works too, giving an
+arbitrary RGB tint with no custom particle type needed — that's how `EmbracingBosomAoe` hits
+the amber palette (`0xE8A33D`) without waiting on a Phase 2C custom particle.
+
+Static-method calls resolve by exact descriptor at compile time (no virtual dispatch), so
+the SRG-name risk that forced irons_spellbooks/irons_lib onto CurseMaven does **not** apply
+here — traveloptics stays flat-dir in `libs/`. Re-verify this reasoning if a future phase
+ever needs to *extend* a traveloptics class instead of just calling its static methods.
 
 ## Known quirk: `/effect give` prints a false failure message on a shortened debuff
 

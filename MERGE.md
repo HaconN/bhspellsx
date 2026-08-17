@@ -126,8 +126,9 @@ compiler and a real jar to test with.
    `DeferredRegister`s.
 
 6. **mods.toml** — no action needed on the bhspells side; bhspells already declares its own
-   `irons_spellbooks`/`irons_lib` dependencies. `bhspellsx`'s `mods.toml` is deleted along
-   with the rest of the bootstrap.
+   `irons_spellbooks`/`irons_lib`/`traveloptics` dependencies (it already calls traveloptics
+   from `EternalPurificationSpell`, which is what Phase 2B's VFX was modelled on).
+   `bhspellsx`'s `mods.toml` is deleted along with the rest of the bootstrap.
 
 ## Verifying after merge
 

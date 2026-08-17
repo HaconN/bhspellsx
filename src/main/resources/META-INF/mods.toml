@@ -23,10 +23,10 @@ description='''${mod_description}'''
     ordering="NONE"
     side="BOTH"
 
-# Phase 0 registers a spell (AbstractSpell) into irons_spellbooks' own SpellRegistry and
-# reads irons_lib's transitive API surface — both are hard requirements, must load first.
-# geckolib / traveloptics / bhspells are NOT dependencies yet: Phase 0 doesn't call into
-# them (see CLAUDE.md / MERGE.md for when that changes).
+# Registers a spell (AbstractSpell) into irons_spellbooks' own SpellRegistry and reads
+# irons_lib's transitive API surface — both hard requirements, must load first.
+# geckolib / bhspells are still NOT dependencies: nothing in this repo calls into them yet
+# (see CLAUDE.md / MERGE.md for when that changes).
 [[dependencies.${mod_id}]]
     modId="irons_spellbooks"
     mandatory=true
@@ -38,5 +38,14 @@ description='''${mod_description}'''
     modId="irons_lib"
     mandatory=true
     versionRange="[1.20.1-1.0.2,)"
+    ordering="AFTER"
+    side="BOTH"
+
+# Phase 2B: EmbracingBosomAoe calls traveloptics' AdvancedCylinderParticleManager at runtime
+# (server-side VFX), so it's now a real hard dependency, not just a compile-time one.
+[[dependencies.${mod_id}]]
+    modId="traveloptics"
+    mandatory=true
+    versionRange="[6.3.0-1.20.1,)"
     ordering="AFTER"
     side="BOTH"

@@ -1,9 +1,10 @@
 package net.offkung.bhspellsx.entity.spells.embracing_bosom;
 
+import com.gametechbc.traveloptics.api.particle.AdvancedCylinderParticleManager;
+import com.gametechbc.traveloptics.api.particle.ParticleDirection;
 import io.redspace.ironsspellbooks.entity.spells.AoeEntity;
+import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.core.particles.ParticleOptions;
-import net.minecraft.core.particles.ParticleTypes;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -13,6 +14,7 @@ import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.level.Level;
 import net.offkung.bhspellsx.registry.BHXEntityRegistry;
 import net.offkung.bhspellsx.registry.BHXMobEffectRegistry;
+import org.joml.Vector3f;
 
 import java.util.List;
 import java.util.Optional;
@@ -28,18 +30,42 @@ import java.util.Optional;
  * checkHits()/applyEffect()/reapplicationDelay plumbing is unused (applyEffect() is an
  * intentional no-op, same as bhspells' own DarkRainFallAoe).
  * <p>
- * All lifetime/radius constants are fixed for this spell (no spell-level scaling), so they're
+ * All lifetime/radius/heal constants are fixed for this spell (no spell-level scaling), so they're
  * baked into the constructor rather than set by the caller — the caller (EmbracingBosomSpell) only
  * needs to setOwner/setPos/addFreshEntity.
  * <p>
- * Placeholder VFX only (vanilla particles) — replaced with real effects in Phase 2.
+ * Phase 2B VFX: traveloptics' AdvancedCylinderParticleManager, called server-side from tick()
+ * (it's a stateless static spawner, not an actual persistent "manager" despite the name — see
+ * EternalPurificationSpell for the same house-style pattern: continuous effects just call it every
+ * tick/interval, one-shot effects call it once). Coloured via vanilla's DustParticleOptions, which
+ * accepts any RGB tint — no custom particle type needed for the amber palette.
  */
 public class EmbracingBosomAoe extends AoeEntity {
     private static final float RADIUS = 6.0f;
     private static final int LIFETIME_TICKS = 160;
     private static final int BUFF_DURATION_TICKS = 40;
-    private static final int PARTICLE_INTERVAL_TICKS = 4;
-    private static final int RING_POINTS = 12;
+
+    // Energy amber (0xE8A33D). Scale 1.0 matches vanilla's own DustParticleOptions.REDSTONE.
+    private static final Vector3f AMBER = new Vector3f(0xE8 / 255f, 0xA3 / 255f, 0x3D / 255f);
+    private static final DustParticleOptions AMBER_DUST = new DustParticleOptions(AMBER, 1.0f);
+
+    // 3a) Cast-in burst (reference image 2): energy converging inward, radius shrinking from
+    // the full 6.0 zone radius down to a point over CONVERGE_BURST_TICKS. 6 particles/tick for
+    // 8 ticks = 48 particles total, spent in 0.4s — a brief flourish, not a sustained cost.
+    private static final int CONVERGE_BURST_TICKS = 8;
+    private static final int CONVERGE_PARTICLES_PER_TICK = 6;
+    private static final float CONVERGE_END_RADIUS = 0.4f;
+    private static final double CONVERGE_HEIGHT = 1.0;
+    private static final double CONVERGE_SPEED = 0.15;
+
+    // 3b) Continuous column (reference image 3), held for the whole 8s lifetime: 3 particles
+    // every 5 ticks = 12 particles/sec, sustained for 160 ticks. Deliberately sparse given the
+    // pack's existing shader/particle load.
+    private static final int COLUMN_INTERVAL_TICKS = 5;
+    private static final int COLUMN_PARTICLES_PER_CALL = 3;
+    private static final double COLUMN_RADIUS = 1.5;
+    private static final double COLUMN_HEIGHT = 2.5;
+    private static final double COLUMN_SPEED = 0.05;
 
     public EmbracingBosomAoe(EntityType<? extends Projectile> entityType, Level level) {
         super(entityType, level);
@@ -66,8 +92,12 @@ public class EmbracingBosomAoe extends AoeEntity {
         if (this.tickCount <= this.getDelay()) {
             return;
         }
-        if (this.tickCount % PARTICLE_INTERVAL_TICKS == 0) {
-            spawnPlaceholderParticles();
+        int activeTicks = this.tickCount - this.getDelay();
+        if (activeTicks <= CONVERGE_BURST_TICKS) {
+            spawnConvergeBurstTick(activeTicks);
+        }
+        if (activeTicks % COLUMN_INTERVAL_TICKS == 0) {
+            spawnColumnTick();
         }
         applyBuffToNearbyTargets();
     }
@@ -102,21 +132,19 @@ public class EmbracingBosomAoe extends AoeEntity {
         }
     }
 
-    private void spawnPlaceholderParticles() {
-        if (!(this.level() instanceof ServerLevel serverLevel)) {
-            return;
-        }
-        double centerX = this.getX();
-        double centerY = this.getY();
-        double centerZ = this.getZ();
-        float radius = this.getRadius();
-        for (int i = 0; i < RING_POINTS; i++) {
-            double angle = 2.0 * Math.PI * i / RING_POINTS;
-            double x = centerX + radius * Math.cos(angle);
-            double z = centerZ + radius * Math.sin(angle);
-            serverLevel.sendParticles(ParticleTypes.HAPPY_VILLAGER, x, centerY + 0.1, z, 1, 0.0, 0.0, 0.0, 0.0);
-        }
-        serverLevel.sendParticles(ParticleTypes.COMPOSTER, centerX, centerY + 0.1, centerZ, 1, 0.0, 0.0, 0.0, 0.0);
+    private void spawnConvergeBurstTick(int activeTicks) {
+        // activeTicks runs 1..CONVERGE_BURST_TICKS inclusive here.
+        float progress = (activeTicks - 1) / (float) (CONVERGE_BURST_TICKS - 1);
+        float radius = RADIUS + (CONVERGE_END_RADIUS - RADIUS) * progress;
+        AdvancedCylinderParticleManager.spawnParticles(this.level(), this.position(),
+                CONVERGE_PARTICLES_PER_TICK, AMBER_DUST, ParticleDirection.INWARD,
+                radius, CONVERGE_HEIGHT, 0.0, 0.0, 0.0, CONVERGE_SPEED, false);
+    }
+
+    private void spawnColumnTick() {
+        AdvancedCylinderParticleManager.spawnParticles(this.level(), this.position(),
+                COLUMN_PARTICLES_PER_CALL, AMBER_DUST, ParticleDirection.UPWARD,
+                COLUMN_RADIUS, COLUMN_HEIGHT, 0.0, 0.0, 0.0, COLUMN_SPEED, false);
     }
 
     @Override
