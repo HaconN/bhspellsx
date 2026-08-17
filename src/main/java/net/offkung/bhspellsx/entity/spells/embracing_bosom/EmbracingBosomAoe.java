@@ -18,13 +18,17 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Modelled on irons_spellbooks' own HealingAoe (io.redspace.ironsspellbooks.entity.spells.HealingAoe):
- * reuses AoeEntity's checkHits()/applyEffect() plumbing (via a canHitEntity override) for the
- * periodic heal, and its setReapplicationDelay() for the 20-tick interval — no hand-rolled tick
- * counter for that part. The per-tick buff refresh has no equivalent in the base class, so it's
- * bolted on via a tick() override that calls super.tick() first.
+ * Modelled on irons_spellbooks' own HealingAoe (io.redspace.ironsspellbooks.entity.spells.HealingAoe)
+ * for the canHitEntity()-based target predicate, and on HealingCircleSpell.onCast for spawning
+ * (see EmbracingBosomSpell).
  * <p>
- * All lifetime/radius/heal constants are fixed for this spell (no spell-level scaling), so they're
+ * The heal is NOT applied here — it lives in EmbracingBosomEffect.applyEffectTick() so it keeps
+ * firing for the 2s the buff lingers after a player leaves the zone. This entity's only job is
+ * applying/refreshing that effect on valid targets every tick; AoeEntity's own
+ * checkHits()/applyEffect()/reapplicationDelay plumbing is unused (applyEffect() is an
+ * intentional no-op, same as bhspells' own DarkRainFallAoe).
+ * <p>
+ * All lifetime/radius constants are fixed for this spell (no spell-level scaling), so they're
  * baked into the constructor rather than set by the caller — the caller (EmbracingBosomSpell) only
  * needs to setOwner/setPos/addFreshEntity.
  * <p>
@@ -33,8 +37,6 @@ import java.util.Optional;
 public class EmbracingBosomAoe extends AoeEntity {
     private static final float RADIUS = 6.0f;
     private static final int LIFETIME_TICKS = 160;
-    private static final float HEAL_AMOUNT = 5.0f;
-    private static final int HEAL_INTERVAL_TICKS = 20;
     private static final int BUFF_DURATION_TICKS = 40;
     private static final int PARTICLE_INTERVAL_TICKS = 4;
     private static final int RING_POINTS = 12;
@@ -43,8 +45,6 @@ public class EmbracingBosomAoe extends AoeEntity {
         super(entityType, level);
         this.setNoGravity(true);
         this.duration = LIFETIME_TICKS;
-        this.setReapplicationDelay(HEAL_INTERVAL_TICKS);
-        this.setDamage(HEAL_AMOUNT);
         this.setRadius(RADIUS);
     }
 
@@ -72,15 +72,14 @@ public class EmbracingBosomAoe extends AoeEntity {
         applyBuffToNearbyTargets();
     }
 
-    /** Called by AoeEntity.checkHits() every reapplicationDelay ticks (20, see constructor). */
+    /** Unused — see class javadoc. Still required: abstract in AoeEntity. */
     @Override
     public void applyEffect(LivingEntity target) {
-        target.heal(this.getDamage());
     }
 
     /**
-     * The single target predicate, reused for both the heal (via checkHits(), through this
-     * override) and the per-tick buff (via applyBuffToNearbyTargets() below).
+     * The single target predicate, reused wherever this entity needs to pick targets
+     * (currently just applyBuffToNearbyTargets() below).
      */
     @Override
     protected boolean canHitEntity(Entity target) {

@@ -25,6 +25,10 @@ public class EmbracingBosomEvents {
 
     private static final float DAMAGE_REDUCTION_MULTIPLIER = 0.8f;
     private static final float DEBUFF_DURATION_MULTIPLIER = 0.7f;
+    // Anything at or above this is treated the same as a true infinite effect (see onApplicable).
+    // ~13.9 hours — comfortably past anything a real potion/spell duration would ever reach, but
+    // well within range of a staff-applied "very long" roleplay duration that isn't literally -1.
+    private static final int EFFECTIVELY_INFINITE_DURATION_TICKS = 1_000_000;
 
     // 4a) Damage reduction 20%.
     @SubscribeEvent
@@ -47,16 +51,31 @@ public class EmbracingBosomEvents {
 
     // 4b) Debuff duration -30%.
     //
-    // INVESTIGATED: MobEffectEvent.Added is not @Cancelable and MobEffectInstance's duration
-    // field has no public setter, confirming the Access Transformer concern. But
-    // MobEffectEvent.Applicable is @Event.HasResult, and LivingEntity.canBeAffected() (decompiled
-    // from the mapped Forge jar) does:
+    // INVESTIGATED (both parts, before writing anything):
+    //
+    // Duration mutation in place: decompiled MobEffectInstance from the mapped Forge jar.
+    // Its `duration` field is private with no public setter; the only thing that touches it
+    // post-construction is the package-private `setDetailsFrom`/`update`, both unreachable from
+    // here. So there is no clean in-place mutation path — reflection or an Access Transformer
+    // are the only ways in, and this file was told to stop and report before reaching for an AT.
+    // Reporting instead: no AT written.
+    //
+    // Cancellation mechanism: MobEffectEvent.Added is not @Cancelable and (per the above) its
+    // instance isn't mutable, confirming that route is closed too. MobEffectEvent.Applicable is
+    // @Event.HasResult though, and LivingEntity.canBeAffected() (also decompiled) does:
     //     event = new MobEffectEvent.Applicable(this, instance);
     //     post(event);
     //     if (event.getResult() != DEFAULT) return event.getResult() == ALLOW;
     // i.e. setResult(DENY) makes addEffect() return false before the instance is ever stored —
-    // no AT needed. This is the approach below: deny the original, then manually add a shortened
-    // replacement, guarded by the ThreadLocal above.
+    // no AT needed for the deny+reapply itself. This is the approach below: deny the original,
+    // then manually add a shortened replacement, guarded by the ThreadLocal above.
+    //
+    // Known side effect of denying in Applicable (accepted, see CLAUDE.md): commands/callers
+    // that read addEffect()'s own return value (e.g. vanilla /effect give) see `false` for the
+    // original call and print their normal failure message, even though our manual re-apply
+    // succeeds right after. No clean fix found without the mutation path above. Per the brief,
+    // this cosmetic message is far less harmful than breaking infinite effects (2a), so it's
+    // left as-is and documented rather than blocked on.
     @SubscribeEvent
     public static void onApplicable(MobEffectEvent.Applicable event) {
         if (APPLYING_SHORTENED_DEBUFF.get()) {
@@ -67,6 +86,16 @@ public class EmbracingBosomEvents {
             return;
         }
         MobEffectInstance instance = event.getEffectInstance();
+        // Infinite/effectively-infinite durations pass through completely untouched: no deny,
+        // no shortening, no re-apply. MobEffectInstance.INFINITE_DURATION == -1 (confirmed by
+        // decompile, not assumed) is what /effect give <player> <effect> infinite produces;
+        // duration * 0.7 on that sentinel (or any other negative value) would corrupt it, and
+        // this is a roleplay server where staff rely on infinite effects working exactly as
+        // given.
+        if (instance.isInfiniteDuration() || instance.getDuration() < 0
+                || instance.getDuration() >= EFFECTIVELY_INFINITE_DURATION_TICKS) {
+            return;
+        }
         MobEffect effect = instance.getEffect();
         if (effect == BHXMobEffectRegistry.EMBRACING_BOSOM.get()) {
             return;

@@ -121,3 +121,30 @@ and bhspells are on the compile classpath but are **not** runtime dependencies �
 this repo calls into them beyond a single hardcoded school `ResourceLocation` string (see
 `EmbracingBosomSpell` — deliberately not a compile-time dependency on `bhspells` itself,
 resolved only at real runtime since bhspells is always present in the live modpack).
+
+## Known quirk: `/effect give` prints a false failure message on a shortened debuff
+
+`event/EmbracingBosomEvents.java`'s debuff-shortening handler (`onApplicable`) works by
+denying the original `MobEffectEvent.Applicable` (`event.setResult(Event.Result.DENY)`) and
+then manually re-applying a shortened replacement. This is the only viable hook —
+`MobEffectInstance`'s `duration` field is private with no public setter (confirmed by
+decompiling it from the mapped Forge jar; the only code that touches it post-construction is
+package-private), so there is no way to mutate the incoming instance in place without an
+Access Transformer, and `MobEffectEvent.Added` isn't cancellable either. Denying was the
+only clean path found.
+
+Side effect: anything that reads `LivingEntity.addEffect()`'s own return value for the
+*original* call — including vanilla's `/effect give` command — sees `false` (because we
+denied it) and prints its normal failure message ("Unable to apply this effect (target is
+either immune to effects, or has something stronger)"), even though our manual re-apply
+succeeds immediately after and the shortened debuff is actually sitting on the target. This
+is cosmetic only; the effect is genuinely applied. No fix without an AT — if one is written
+later for other reasons, revisit this.
+
+**Never** let the shortening logic touch an infinite-duration effect. `/effect give <player>
+<effect> infinite` sets `MobEffectInstance.duration = MobEffectInstance.INFINITE_DURATION`
+(`-1`, confirmed by decompile — `isInfiniteDuration()` is exactly `duration == -1`).
+`onApplicable` checks `instance.isInfiniteDuration()` (plus a `>= 1_000_000` tick ceiling for
+effectively-infinite-but-technically-finite roleplay durations) and passes those straight
+through untouched — no deny, no shortening. This server is used for staff to apply infinite
+effects for scene purposes; breaking that is worse than the cosmetic message above.
