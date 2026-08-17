@@ -1,4 +1,5 @@
 {
   "spell.bhspellsx.embracing_bosom": "Embracing Bosom",
-  "spell.bhspellsx.embracing_bosom.guide": "Phase 0 test spell. Hold to channel, then heal yourself for 1 health and release a small ring of particles at your feet."
+  "spell.bhspellsx.embracing_bosom.guide": "Channel to plant a warding circle at your feet. Players standing in it are healed periodically and take reduced damage while blessed; harmful effects applied to them expire faster.",
+  "effect.bhspellsx.embracing_bosom": "Embracing Bosom"
 }

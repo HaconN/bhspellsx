@@ -86,14 +86,38 @@ and is not the intended workflow.
 
 ## Dependency jars
 
-All jars in `libs/` are `compileOnly fg.deobf(...)` — copied read-only from the modpack's
-own `mods/` folder, never from CurseMaven or any remote maven (project policy — keeps this
-buildable offline and guarantees exact version match with the live pack). They are
-`.gitignore`d; see `README.md` for how to repopulate `libs/` on a fresh checkout.
+**irons_spellbooks and irons_lib come from CurseMaven, not `libs/`, as of Phase 1.**
+`compileOnly fg.deobf(files("libs/irons_spellbooks-....jar"))` looked fine in Phase 0
+(one no-op spell, no inherited vanilla method overrides) but breaks silently the moment you
+extend a class that inherits from vanilla `Entity` (e.g. `AoeEntity`). A flat-dir jar is
+never remapped by ForgeGradle, so vanilla-inherited method names stay in SRG form while the
+workspace uses official mappings — an `@Override` compiles cleanly but never actually
+overrides anything at runtime, **no error, entity just never ticks**. Confirmed and fixed in
+Phase 1 STEP 0 (see the throwaway `TICK 1`..`TICK 5` probe in the Phase 1 commit history).
 
-Phase 0's `mods.toml` only hard-depends on `irons_spellbooks` and `irons_lib`. geckolib,
-traveloptics, and bhspells are on the compile classpath for later phases but are **not**
-runtime dependencies yet — Phase 0's spell doesn't call into any of them beyond a single
-hardcoded school `ResourceLocation` string (see `EmbracingBosomSpell` — deliberately not a
-compile-time dependency on `bhspells` itself, resolved only at real runtime since bhspells
-is always present in the live modpack).
+CurseMaven coordinates, pinned to the exact modpack versions (do not bump without
+re-verifying against the CurseForge file page):
+
+```groovy
+compileOnly fg.deobf("curse.maven:irons-spells-n-spellbooks-855414:8237094") // = 1.20.1-3.16.1
+compileOnly fg.deobf("curse.maven:irons-lib-1492763:7907335")                // = 1.20.1-1.0.2
+```
+
+The `repositories {}` block needs a **plain `maven { url; content { includeGroup ... } } }`**
+for `https://cursemaven.com` — do not wrap it in `exclusiveContent {}`. That was tried first
+and broke FG's internal deobf-substitution mechanism: the build failed with
+`Could not find curse.maven:...:<fileId>_mapped_official_1.20.1` even though the raw
+artifact and its POM were reachable directly (verified with `curl`). Plain `maven{}` +
+`content{}` is what FG's own repo-substitution logic expects; `exclusiveContent{}` isn't.
+
+geckolib, traveloptics, and bhspells stay in `libs/` (`compileOnly fg.deobf(files(...))`) —
+we only ever call their static helpers, never extend their classes, so the SRG-name risk
+above doesn't apply to them. Pulled read-only from the modpack's own `mods/` folder, never
+from CurseMaven, per project policy for these three. They're `.gitignore`d; see `README.md`
+for how to repopulate `libs/` on a fresh checkout.
+
+`mods.toml` only hard-depends on `irons_spellbooks` and `irons_lib`. geckolib, traveloptics,
+and bhspells are on the compile classpath but are **not** runtime dependencies — nothing in
+this repo calls into them beyond a single hardcoded school `ResourceLocation` string (see
+`EmbracingBosomSpell` — deliberately not a compile-time dependency on `bhspells` itself,
+resolved only at real runtime since bhspells is always present in the live modpack).

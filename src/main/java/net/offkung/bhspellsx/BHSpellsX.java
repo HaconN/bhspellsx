@@ -2,9 +2,13 @@ package net.offkung.bhspellsx;
 
 import com.mojang.logging.LogUtils;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.offkung.bhspellsx.event.EmbracingBosomEvents;
+import net.offkung.bhspellsx.registry.BHXEntityRegistry;
+import net.offkung.bhspellsx.registry.BHXMobEffectRegistry;
 import net.offkung.bhspellsx.registry.BHXSpellRegistry;
 import org.slf4j.Logger;
 
@@ -22,6 +26,12 @@ public class BHSpellsX {
     public BHSpellsX(FMLJavaModLoadingContext context) {
         IEventBus modEventBus = context.getModEventBus();
         BHXSpellRegistry.register(modEventBus);
+        BHXEntityRegistry.register(modEventBus);
+        BHXMobEffectRegistry.register(modEventBus);
+        // EmbracingBosomEvents is portable content (no modid baked in) — registered manually
+        // here rather than via @Mod.EventBusSubscriber, matching bhspells' own house style
+        // (see BypassDamageEvent/SwordDashManager in the real bhspells mod).
+        MinecraftForge.EVENT_BUS.register(EmbracingBosomEvents.class);
     }
 
     public static ResourceLocation id(String path) {

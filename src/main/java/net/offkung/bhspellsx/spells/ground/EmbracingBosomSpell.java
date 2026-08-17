@@ -6,16 +6,17 @@ import io.redspace.ironsspellbooks.api.spells.AbstractSpell;
 import io.redspace.ironsspellbooks.api.spells.CastSource;
 import io.redspace.ironsspellbooks.api.spells.CastType;
 import io.redspace.ironsspellbooks.api.spells.SpellRarity;
-import net.minecraft.core.particles.ParticleTypes;
+import io.redspace.ironsspellbooks.api.util.Utils;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
+import net.offkung.bhspellsx.entity.spells.embracing_bosom.EmbracingBosomAoe;
 
 /**
- * Phase 0 proof-of-pipeline spell. No visual effects beyond a vanilla particle ring —
- * this exists purely to confirm the AbstractSpell registration / cast pipeline works end
- * to end against irons_spellbooks 3.16.1 before any real content is built.
+ * Phase 1: casts EmbracingBosomAoe at the caster's feet. See that class for the actual
+ * heal/buff/damage-reduction mechanics — this spell class is just the AbstractSpell registration
+ * and cast-site spawn logic.
  */
 public class EmbracingBosomSpell extends AbstractSpell {
     private static final ResourceLocation SPELL_ID =
@@ -24,9 +25,6 @@ public class EmbracingBosomSpell extends AbstractSpell {
     // MERGE: swap to BHSchoolRegistry.GROUND_RESOURCE once this moves into bhspells proper.
     private static final ResourceLocation GROUND_SCHOOL_RESOURCE =
             ResourceLocation.fromNamespaceAndPath("bhspells", "ground");
-
-    private static final int PARTICLE_RING_POINTS = 12;
-    private static final double PARTICLE_RING_RADIUS = 0.8;
 
     private final DefaultConfig defaultConfig = new DefaultConfig()
             .setMinRarity(SpellRarity.EPIC)
@@ -60,23 +58,13 @@ public class EmbracingBosomSpell extends AbstractSpell {
 
     @Override
     public void onCast(Level level, int spellLevel, LivingEntity entity, CastSource castSource, MagicData playerMagicData) {
-        entity.heal(1.0f);
-        spawnParticleRing(level, entity);
+        // Ground-snap from the caster's own position, same pattern as irons_spellbooks'
+        // HealingCircleSpell.onCast.
+        Vec3 spawnPos = Utils.moveToRelativeGroundLevel(level, entity.position(), 6);
+        EmbracingBosomAoe aoe = new EmbracingBosomAoe(level);
+        aoe.setOwner(entity);
+        aoe.setPos(spawnPos);
+        level.addFreshEntity(aoe);
         super.onCast(level, spellLevel, entity, castSource, playerMagicData);
-    }
-
-    private static void spawnParticleRing(Level level, LivingEntity entity) {
-        if (!(level instanceof ServerLevel serverLevel)) {
-            return;
-        }
-        double centerX = entity.getX();
-        double centerY = entity.getY();
-        double centerZ = entity.getZ();
-        for (int i = 0; i < PARTICLE_RING_POINTS; i++) {
-            double angle = 2.0 * Math.PI * i / PARTICLE_RING_POINTS;
-            double x = centerX + PARTICLE_RING_RADIUS * Math.cos(angle);
-            double z = centerZ + PARTICLE_RING_RADIUS * Math.sin(angle);
-            serverLevel.sendParticles(ParticleTypes.HAPPY_VILLAGER, x, centerY + 0.1, z, 1, 0.0, 0.0, 0.0, 0.0);
-        }
     }
 }
