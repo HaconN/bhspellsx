@@ -5,6 +5,7 @@ import com.gametechbc.traveloptics.api.particle.ParticleDirection;
 import io.redspace.ironsspellbooks.entity.spells.AoeEntity;
 import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.core.particles.ParticleOptions;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -39,15 +40,29 @@ import java.util.Optional;
  * EternalPurificationSpell for the same house-style pattern: continuous effects just call it every
  * tick/interval, one-shot effects call it once). Coloured via vanilla's DustParticleOptions, which
  * accepts any RGB tint — no custom particle type needed for the amber palette.
+ * <p>
+ * The continuous column (spawnColumnTick) mixes two particle types rather than using
+ * DustParticleOptions alone: decompiling DustParticleBase showed its constructor forcibly
+ * multiplies whatever velocity we pass in by 0.1 (`xd/yd/zd *= 0.1f`) and applies 0.96 friction
+ * per tick on top, with only an ~8-40 tick lifetime — dust particles are built to hover, not
+ * travel, and no reasonable `speed` value makes them read as a rising column before they expire.
+ * (Gravity is NOT the cause — dust's `gravity` field is never set, defaults to 0.) ParticleTypes.END_ROD
+ * (SimpleAnimatedParticle) applies velocity undamped and lives 60-71 ticks, so it actually
+ * rises visibly; AMBER_DUST is kept alongside it, sparse, for colour near the base.
  */
 public class EmbracingBosomAoe extends AoeEntity {
     private static final float RADIUS = 6.0f;
     private static final int LIFETIME_TICKS = 160;
     private static final int BUFF_DURATION_TICKS = 40;
 
-    // Energy amber (0xE8A33D). Scale 1.0 matches vanilla's own DustParticleOptions.REDSTONE.
-    private static final Vector3f AMBER = new Vector3f(0xE8 / 255f, 0xA3 / 255f, 0x3D / 255f);
-    private static final DustParticleOptions AMBER_DUST = new DustParticleOptions(AMBER, 1.0f);
+    // Single source of truth for the VFX tint — retune this one constant, nothing else.
+    private static final int AMBER_TINT_HEX = 0xF0B23D;
+    private static final Vector3f AMBER_TINT = new Vector3f(
+            ((AMBER_TINT_HEX >> 16) & 0xFF) / 255f,
+            ((AMBER_TINT_HEX >> 8) & 0xFF) / 255f,
+            (AMBER_TINT_HEX & 0xFF) / 255f);
+    // Scale 1.0 matches vanilla's own DustParticleOptions.REDSTONE.
+    private static final DustParticleOptions AMBER_DUST = new DustParticleOptions(AMBER_TINT, 1.0f);
 
     // 3a) Cast-in burst (reference image 2): energy converging inward, radius shrinking from
     // the full 6.0 zone radius down to a point over CONVERGE_BURST_TICKS. 6 particles/tick for
@@ -58,14 +73,26 @@ public class EmbracingBosomAoe extends AoeEntity {
     private static final double CONVERGE_HEIGHT = 1.0;
     private static final double CONVERGE_SPEED = 0.15;
 
-    // 3b) Continuous column (reference image 3), held for the whole 8s lifetime: 3 particles
-    // every 5 ticks = 12 particles/sec, sustained for 160 ticks. Deliberately sparse given the
-    // pack's existing shader/particle load.
+    // 3b) Continuous column (reference image 3), held for the whole 8s lifetime, mixing two
+    // particle types (see class javadoc for why DustParticleOptions alone doesn't rise):
+    //   - END_ROD carries the actual rising motion, undamped velocity, ~3s lifetime.
+    //   - AMBER_DUST adds sparse colour near the base (short-lived/near-static, but still
+    //     visible while it lasts).
+    // Every 5 ticks: 2 END_ROD + 1 AMBER_DUST = 3 particles/call = 12 particles/sec total,
+    // sustained for 160 ticks — same overall density as before, just reallocated between the
+    // two types instead of increased.
     private static final int COLUMN_INTERVAL_TICKS = 5;
-    private static final int COLUMN_PARTICLES_PER_CALL = 3;
+    private static final int COLUMN_END_ROD_PER_CALL = 2;
+    private static final int COLUMN_DUST_PER_CALL = 1;
     private static final double COLUMN_RADIUS = 1.5;
     private static final double COLUMN_HEIGHT = 2.5;
-    private static final double COLUMN_SPEED = 0.05;
+    // END_ROD's velocity passes straight through the particle unmodified (no damping, unlike
+    // dust) — 0.04 blocks/tick over its ~60-71 tick lifetime rises roughly 2.5-3 blocks, visible
+    // without shooting off screen.
+    private static final double COLUMN_END_ROD_SPEED = 0.04;
+    // Dust's velocity gets crushed to ~10% by DustParticleBase regardless of this value (see
+    // class javadoc); kept modest since it's only meant to sit and glow near the base, not rise.
+    private static final double COLUMN_DUST_SPEED = 0.02;
 
     public EmbracingBosomAoe(EntityType<? extends Projectile> entityType, Level level) {
         super(entityType, level);
@@ -143,8 +170,11 @@ public class EmbracingBosomAoe extends AoeEntity {
 
     private void spawnColumnTick() {
         AdvancedCylinderParticleManager.spawnParticles(this.level(), this.position(),
-                COLUMN_PARTICLES_PER_CALL, AMBER_DUST, ParticleDirection.UPWARD,
-                COLUMN_RADIUS, COLUMN_HEIGHT, 0.0, 0.0, 0.0, COLUMN_SPEED, false);
+                COLUMN_END_ROD_PER_CALL, ParticleTypes.END_ROD, ParticleDirection.UPWARD,
+                COLUMN_RADIUS, COLUMN_HEIGHT, 0.0, 0.0, 0.0, COLUMN_END_ROD_SPEED, false);
+        AdvancedCylinderParticleManager.spawnParticles(this.level(), this.position(),
+                COLUMN_DUST_PER_CALL, AMBER_DUST, ParticleDirection.UPWARD,
+                COLUMN_RADIUS, COLUMN_HEIGHT, 0.0, 0.0, 0.0, COLUMN_DUST_SPEED, false);
     }
 
     @Override
