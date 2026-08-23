@@ -1,20 +1,26 @@
 package net.offkung.bhspellsx.client.renderer;
 
+import com.mojang.blaze3d.platform.GlStateManager;
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.math.Axis;
+import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.RenderStateShard;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
-import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.offkung.bhspellsx.entity.spells.embracing_bosom.EmbracingBosomAoe;
-import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -22,17 +28,32 @@ import java.util.UUID;
  * flat annulus/disc mesh in the XZ plane, built directly (no GeckoLib, no model file — Blockbench
  * models are cube-based and can't produce a clean ring).
  * <p>
- * Uses vanilla's {@code RenderType.eyes(ResourceLocation)} for every layer: NEW_ENTITY vertex
- * format (position/color/uv/overlay/lightmap/normal), additive transparency, no depth-write
- * (WriteMaskStateShard(colorWrite=true, depthWrite=false)), and — critically — it never binds a
- * LightmapStateShard, so the world lightmap has no effect on it: it's exactly the same trick
- * vanilla uses for glowing enderman/spider eyes, and gives full-bright emissive rendering for
- * free without a hand-rolled RenderType.CompositeState. Confirmed against the decompiled/official
- * mapping (RenderType.m_110488_ -> eyes) rather than assumed.
+ * === Post-mortem: the first version of this file used vanilla's {@code RenderType.eyes()} and
+ * was completely invisible in-game. Root-caused against the decompiled/official-mapped source
+ * (not from memory) before touching anything:
  * <p>
- * Depth TEST is left at its default (enabled), so the rings are still properly occluded by solid
- * terrain above them; only depth WRITE is disabled, so overlapping layers/segments blend via
- * their additive alpha instead of fighting each other or the ground for the depth buffer.
+ * 1) {@code RenderType.eyes(ResourceLocation)} (SRG {@code m_110488_}) never calls
+ * {@code setCullState(...)} in its factory. {@code CompositeState.CompositeStateBuilder}'s
+ * default cull field is {@code CullStateShard(true)}, and {@code CullStateShard}'s own code shows
+ * that "true" means "don't touch whatever cull state is already active" — i.e. it does NOT mean
+ * "disable culling", it means "leave backface culling on". So eyes() renders single-sided.
+ * <p>
+ * 2) {@code rendertype_eyes}'s own JSON/GLSL (assets/minecraft/shaders/core/rendertype_eyes.*)
+ * DOES multiply {@code texture(Sampler0, texCoord0) * vertexColor}, so per-vertex tint AND alpha
+ * are read by the shader correctly. But the RenderType's {@code TransparencyStateShard} is
+ * ADDITIVE_TRANSPARENCY, whose real GL blend func (confirmed in RenderStateShard's decompiled
+ * source) is {@code blendFunc(ONE, ONE)} — source factor ONE, not SRC_ALPHA. That ignores our
+ * vertex alpha entirely for blending purposes: fade-in/out and per-layer alpha would have had
+ * zero visible effect even once the mesh itself was visible. Fixed below by hand-building a
+ * TransparencyStateShard with {@code blendFunc(SRC_ALPHA, ONE)} — still additive/never-darkens,
+ * but now actually driven by the alpha we set per vertex.
+ * <p>
+ * Because RenderStateShard's shard-instance fields are {@code protected} (package-private in
+ * effect, from our mod's package), eyes() couldn't just be patched — the whole CompositeState is
+ * built here from scratch instead, using RenderStateShard's public shard *constructors* and
+ * {@code GameRenderer.getPositionColorTexShader()} (position_color_tex: Position+Color+UV0 only —
+ * we don't use overlay/lightmap/normal, so there's no reason to carry the heavier NEW_ENTITY
+ * format eyes() used).
  */
 public class EmbracingBosomRingRenderer extends EntityRenderer<EmbracingBosomAoe> {
     private static final ResourceLocation DUMMY_TEXTURE =
@@ -65,6 +86,42 @@ public class EmbracingBosomRingRenderer extends EntityRenderer<EmbracingBosomAoe
         return ResourceLocation.fromNamespaceAndPath("bhspellsx", RING_TEX_PATH + name + ".png");
     }
 
+    // Additive, but driven by SRC_ALPHA (not eyes()'s ONE,ONE) so our alpha/fade actually matters.
+    // Never darkens the framebuffer — same "safe" additive property, just alpha-aware.
+    private static final RenderStateShard.TransparencyStateShard ADDITIVE_ALPHA_TRANSPARENCY =
+            new RenderStateShard.TransparencyStateShard("bhspellsx_additive_alpha", () -> {
+                RenderSystem.enableBlend();
+                RenderSystem.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE);
+            }, () -> {
+                RenderSystem.disableBlend();
+                RenderSystem.defaultBlendFunc();
+            });
+
+    private static final Map<ResourceLocation, RenderType> RENDER_TYPE_CACHE = new HashMap<>();
+
+    private static RenderType ringRenderType(ResourceLocation texture) {
+        return RENDER_TYPE_CACHE.computeIfAbsent(texture, EmbracingBosomRingRenderer::buildRingRenderType);
+    }
+
+    private static RenderType buildRingRenderType(ResourceLocation texture) {
+        RenderType.CompositeState state = RenderType.CompositeState.builder()
+                .setShaderState(new RenderStateShard.ShaderStateShard(GameRenderer::getPositionColorTexShader))
+                .setTextureState(new RenderStateShard.TextureStateShard(texture, false, false))
+                .setTransparencyState(ADDITIVE_ALPHA_TRANSPARENCY)
+                // Explicit — this is the fix. CullStateShard(false) actively disables GL culling;
+                // omitting this call (as RenderType.eyes() does) leaves the default cull-on state.
+                .setCullState(new RenderStateShard.CullStateShard(false))
+                // Explicit full-bright: never sample the world lightmap, regardless of builder default.
+                .setLightmapState(new RenderStateShard.LightmapStateShard(false))
+                .setOverlayState(new RenderStateShard.OverlayStateShard(false))
+                // Depth TEST left at the builder default (LEQUAL) — still occluded by solid terrain.
+                // Depth WRITE off so layers/segments blend via alpha instead of z-fighting.
+                .setWriteMaskState(new RenderStateShard.WriteMaskStateShard(true, false))
+                .createCompositeState(false);
+        return RenderType.create("bhspellsx_ring", DefaultVertexFormat.POSITION_COLOR_TEX,
+                VertexFormat.Mode.QUADS, 256, false, true, state);
+    }
+
     public EmbracingBosomRingRenderer(EntityRendererProvider.Context context) {
         super(context);
     }
@@ -78,6 +135,7 @@ public class EmbracingBosomRingRenderer extends EntityRenderer<EmbracingBosomAoe
     public void render(EmbracingBosomAoe entity, float entityYaw, float partialTicks, PoseStack poseStack,
                         MultiBufferSource buffer, int packedLight) {
         int activeTicks = Math.max(0, entity.tickCount - entity.getDelay());
+
         float fadeAlpha = lifecycleFadeAlpha(activeTicks, partialTicks);
         if (fadeAlpha <= 0.0f) {
             return;
@@ -133,13 +191,19 @@ public class EmbracingBosomRingRenderer extends EntityRenderer<EmbracingBosomAoe
         poseStack.translate(0.0, layer.yOffset(), 0.0);
         poseStack.mulPose(Axis.YP.rotationDegrees(angleDeg));
 
-        PoseStack.Pose pose = poseStack.last();
-        Matrix4f positionMatrix = pose.pose();
-        Matrix3f normalMatrix = pose.normal();
-        VertexConsumer consumer = buffer.getBuffer(RenderType.eyes(layer.texture()));
+        Matrix4f positionMatrix = poseStack.last().pose();
+        VertexConsumer consumer = buffer.getBuffer(ringRenderType(layer.texture()));
+        buildAnnulus(consumer, positionMatrix, outer, inner, r, g, b, a);
 
-        // uv normalized against the (possibly shrunk) outer radius so the texture scales in step
-        // with the mesh during fade-out rather than sliding across it.
+        poseStack.popPose();
+    }
+
+    /** x/z are local ring-plane coordinates (blocks); y is always 0 — the caller's pose already
+     *  carries its yOffset via translate(). Backfaces are NOT culled (CullStateShard(false) in
+     *  buildRingRenderType), so the ring reads correctly from below, per spec. */
+    private static void buildAnnulus(VertexConsumer consumer, Matrix4f positionMatrix,
+                                      float outer, float inner, float r, float g, float b, float a) {
+        // uv normalized against the outer radius so the texture centre sits at the ring centre.
         float uvScale = outer > 1.0e-4f ? 1.0f / (2.0f * outer) : 0.0f;
 
         float prevCos = Mth.cos(0.0f);
@@ -150,32 +214,23 @@ public class EmbracingBosomRingRenderer extends EntityRenderer<EmbracingBosomAoe
             float sin = Mth.sin(angleRad);
 
             // Quad: inner@prev, outer@prev, outer@cur, inner@cur.
-            quadVertex(consumer, positionMatrix, normalMatrix, inner * prevCos, inner * prevSin, r, g, b, a, uvScale);
-            quadVertex(consumer, positionMatrix, normalMatrix, outer * prevCos, outer * prevSin, r, g, b, a, uvScale);
-            quadVertex(consumer, positionMatrix, normalMatrix, outer * cos, outer * sin, r, g, b, a, uvScale);
-            quadVertex(consumer, positionMatrix, normalMatrix, inner * cos, inner * sin, r, g, b, a, uvScale);
+            quadVertex(consumer, positionMatrix, inner * prevCos, inner * prevSin, r, g, b, a, uvScale);
+            quadVertex(consumer, positionMatrix, outer * prevCos, outer * prevSin, r, g, b, a, uvScale);
+            quadVertex(consumer, positionMatrix, outer * cos, outer * sin, r, g, b, a, uvScale);
+            quadVertex(consumer, positionMatrix, inner * cos, inner * sin, r, g, b, a, uvScale);
 
             prevCos = cos;
             prevSin = sin;
         }
-
-        poseStack.popPose();
     }
 
-    /** x/z are local ring-plane coordinates (blocks); y is always 0 — the layer's own pose already
-     *  carries its yOffset via translate(). Backfaces are not culled (RenderType.eyes doesn't set
-     *  a CullStateShard), so the ring reads correctly from below, per spec. */
-    private static void quadVertex(VertexConsumer consumer, Matrix4f positionMatrix, Matrix3f normalMatrix,
+    private static void quadVertex(VertexConsumer consumer, Matrix4f positionMatrix,
                                     float x, float z, float r, float g, float b, float a, float uvScale) {
         float u = x * uvScale + 0.5f;
         float v = z * uvScale + 0.5f;
         consumer.vertex(positionMatrix, x, 0.0f, z)
                 .color(r, g, b, a)
                 .uv(u, v)
-                .overlayCoords(OverlayTexture.NO_OVERLAY)
-                .uv2(15728880) // LightTexture.FULL_BRIGHT — unused by RenderType.eyes (no lightmap
-                               // bound) but the vertex format still requires a value.
-                .normal(normalMatrix, 0.0f, 1.0f, 0.0f)
                 .endVertex();
     }
 
