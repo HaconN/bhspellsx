@@ -52,7 +52,9 @@ import java.util.Optional;
  */
 public class EmbracingBosomAoe extends AoeEntity {
     private static final float RADIUS = 6.0f;
-    private static final int LIFETIME_TICKS = 160;
+    // Public (not private) solely so EmbracingBosomRingRenderer (client) can compute fade-in/out
+    // timing from the same source of truth — the value/behavior here is unchanged.
+    public static final int LIFETIME_TICKS = 160;
     private static final int BUFF_DURATION_TICKS = 40;
 
     // Single source of truth for the VFX tint — retune this one constant, nothing else.

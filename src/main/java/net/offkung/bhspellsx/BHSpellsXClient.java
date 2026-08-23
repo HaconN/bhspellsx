@@ -4,7 +4,7 @@ import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.EntityRenderersEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
-import net.offkung.bhspellsx.client.renderer.NoopEntityRenderer;
+import net.offkung.bhspellsx.client.renderer.EmbracingBosomRingRenderer;
 import net.offkung.bhspellsx.registry.BHXEntityRegistry;
 
 /**
@@ -15,6 +15,6 @@ import net.offkung.bhspellsx.registry.BHXEntityRegistry;
 public class BHSpellsXClient {
     @SubscribeEvent
     public static void onRegisterRenderers(EntityRenderersEvent.RegisterRenderers event) {
-        event.registerEntityRenderer(BHXEntityRegistry.EMBRACING_BOSOM_AOE.get(), NoopEntityRenderer::new);
+        event.registerEntityRenderer(BHXEntityRegistry.EMBRACING_BOSOM_AOE.get(), EmbracingBosomRingRenderer::new);
     }
 }

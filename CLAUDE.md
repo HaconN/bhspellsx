@@ -17,7 +17,7 @@ gets folded into the actual `bhspells` mod by the team lead (see `MERGE.md`).
 | irons_lib | 1.20.1-1.0.2 |
 | geckolib | 4.8.3 |
 | traveloptics | 6.3.0-1.20.1 |
-| bhspells | 1.20.1-1.1.3-forge |
+| bhspells | 1.20.1-1.1.4-forge |
 
 Source of truth for this table: recon against
 `D:\Game\Modrinth App\profiles\Minguye Origins Work 1.0.1\mods` — re-verify against that
