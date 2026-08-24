@@ -95,6 +95,28 @@ import java.util.UUID;
  * this is one uniform brightness multiplier across the whole mesh (not spatially varying), floored
  * so it stays visible in caves/at night, but dimmer than true full-bright — compensated for by
  * raising the per-layer alpha values below (see LAYERS).
+ * <p>
+ * === Spawn converge phase. Originally the rings just faded in at their landed radius, which read
+ * as switching on rather than forming — disconnected from the Phase 2B dust burst
+ * (EmbracingBosomAoe.spawnConvergeBurstTick), which visibly converges from radius 6 to 0.4 over
+ * its first 8 ticks. Each layer now starts at RING_CONVERGE_START_RADIUS_MULT times its configured
+ * radius and eases (cubic ease-out — fast, then decelerating to a rest, not linear) down to 1x
+ * over RING_CONVERGE_TICKS, with the alpha fade-in driven by the exact same per-layer eased
+ * progress value so radius and opacity always resolve together. RING_CONVERGE_TICKS (15) runs
+ * longer than the dust's 8 ticks by design: the ease-out curve front-loads most of the visible
+ * radius/alpha motion into roughly that same first ~8 ticks, so the two still read as one event,
+ * while the ring gets a bit more time to visibly decelerate into place rather than snapping to
+ * rest exactly when the dust does. Layers are staggered by radius (smaller settles first) over
+ * RING_CONVERGE_STAGGER_TICKS so all five don't land on the same frame — this affects only the
+ * radius/alpha convergence, not the base rotation, which always progresses continuously.
+ * Rotation gets its own "spin-up" on top of the base angle: convergeSpinBonusDegrees() adds the
+ * closed-form integral of speed*(RING_CONVERGE_SPIN_MULT-1)*(1-t/C)^3 (same cubic curve), so each
+ * layer spins RING_CONVERGE_SPIN_MULT times its configured speed at t=0 and eases to exactly its
+ * configured speed by t=RING_CONVERGE_TICKS — continuous (no pop) and shared by all layers
+ * unstaggered, so the spin-up reads as one shared pulse rather than per-layer. Direction/sign and
+ * each layer's relative speed ratio are untouched; only the transient bonus is added.
+ * Does not touch the existing fade-out (FADE_OUT_TICKS/FADE_OUT_SHRINK) at all — that logic is
+ * unchanged and still applies uniformly, unstaggered, at the end of the AoE's life.
  */
 public class EmbracingBosomRingRenderer extends EntityRenderer<EmbracingBosomAoe> {
     private static final ResourceLocation DUMMY_TEXTURE =
@@ -110,10 +132,16 @@ public class EmbracingBosomRingRenderer extends EntityRenderer<EmbracingBosomAoe
     // each frame with no per-segment heap allocation (see renderLayer()).
     private static final int SEGMENTS = 48;
 
-    private static final int FADE_IN_TICKS = 10;
     private static final int FADE_OUT_TICKS = 20;
     // Fade-out also contracts the radius slightly for a "flowing inward" feel — kept subtle.
     private static final float FADE_OUT_SHRINK = 0.18f;
+
+    // Spawn converge phase — see class javadoc. Named/exposed per spec so these can be retuned
+    // without touching the animation code below.
+    private static final int RING_CONVERGE_TICKS = 15;
+    private static final float RING_CONVERGE_START_RADIUS_MULT = 1.7f;
+    private static final float RING_CONVERGE_SPIN_MULT = 3.0f;
+    private static final float RING_CONVERGE_STAGGER_TICKS = 4.0f;
 
     // Alpha values bumped ~15-20% over the pre-Item-1 numbers (0.45/0.40/0.70/0.65/0.85) to
     // compensate for entityTranslucentEmissive's fake directional lighting dimming the ring
@@ -127,6 +155,11 @@ public class EmbracingBosomRingRenderer extends EntityRenderer<EmbracingBosomAoe
             // Thin bright annulus rather than a full disc, matching the "rim" name/role. Smaller
             // bump here — it was already near the top of the range.
             new RingLayer(ring("highlight_rim"), 6.2f, 5.6f, -5.4f, 360f, 0.90f, AMBER_TINT_HEX, 0.10f));
+
+    // Drives the per-layer converge stagger (see staggerOffsetTicks()) — derived from LAYERS
+    // itself so it stays correct if the stack is retuned.
+    private static final float MIN_LAYER_RADIUS = (float) LAYERS.stream().mapToDouble(RingLayer::radius).min().orElse(0.0);
+    private static final float MAX_LAYER_RADIUS = (float) LAYERS.stream().mapToDouble(RingLayer::radius).max().orElse(1.0);
 
     private static ResourceLocation ring(String name) {
         return ResourceLocation.fromNamespaceAndPath("bhspellsx", RING_TEX_PATH + name + ".png");
@@ -189,26 +222,25 @@ public class EmbracingBosomRingRenderer extends EntityRenderer<EmbracingBosomAoe
                         MultiBufferSource buffer, int packedLight) {
         int activeTicks = Math.max(0, entity.tickCount - entity.getDelay());
 
-        float fadeAlpha = lifecycleFadeAlpha(activeTicks, partialTicks);
-        if (fadeAlpha <= 0.0f) {
+        float fadeOutAlpha = lifecycleFadeOutAlpha(activeTicks, partialTicks);
+        if (fadeOutAlpha <= 0.0f) {
             return;
         }
         float shrink = lifecycleShrink(activeTicks, partialTicks);
 
         UUID uuid = entity.getUUID();
         for (int i = 0; i < LAYERS.size(); i++) {
-            renderLayer(LAYERS.get(i), i, uuid, entity.tickCount, partialTicks, fadeAlpha, shrink,
+            renderLayer(LAYERS.get(i), i, uuid, entity.tickCount, activeTicks, partialTicks, fadeOutAlpha, shrink,
                     poseStack, buffer);
         }
         // Intentionally no super.render() call — same as the NoopEntityRenderer this replaces,
         // this entity has no model/nametag/shadow to fall back on.
     }
 
-    private static float lifecycleFadeAlpha(int activeTicks, float partialTicks) {
+    /** 1.0 until the last FADE_OUT_TICKS of the AoE's life, then ramps linearly to 0. Unchanged
+     *  by the spawn converge work — the spawn fade-in now lives per-layer in renderLayer(). */
+    private static float lifecycleFadeOutAlpha(int activeTicks, float partialTicks) {
         float t = activeTicks + partialTicks;
-        if (t < FADE_IN_TICKS) {
-            return Mth.clamp(t / FADE_IN_TICKS, 0.0f, 1.0f);
-        }
         float fadeOutStart = EmbracingBosomAoe.LIFETIME_TICKS - FADE_OUT_TICKS;
         if (t > fadeOutStart) {
             return 1.0f - Mth.clamp((t - fadeOutStart) / FADE_OUT_TICKS, 0.0f, 1.0f);
@@ -226,19 +258,74 @@ public class EmbracingBosomRingRenderer extends EntityRenderer<EmbracingBosomAoe
         return 1.0f;
     }
 
-    private static void renderLayer(RingLayer layer, int layerIndex, UUID uuid, int tickCount,
-                                     float partialTicks, float fadeAlpha, float shrink,
+    /** Fraction of RING_CONVERGE_TICKS the given layer has advanced through its own (staggered)
+     *  local converge window, clamped to [0, 1]. Only affects radius/alpha, not rotation — see
+     *  class javadoc. */
+    private static float layerConvergeProgress(RingLayer layer, int activeTicks, float partialTicks) {
+        float globalT = activeTicks + partialTicks;
+        float localT = Math.max(0.0f, globalT - staggerOffsetTicks(layer));
+        return Mth.clamp(localT / RING_CONVERGE_TICKS, 0.0f, 1.0f);
+    }
+
+    /** Smaller-radius layers settle first: staggerOffsetTicks ranges from 0 (smallest radius in
+     *  LAYERS) to RING_CONVERGE_STAGGER_TICKS (largest), interpolated by radius. */
+    private static float staggerOffsetTicks(RingLayer layer) {
+        float range = MAX_LAYER_RADIUS - MIN_LAYER_RADIUS;
+        if (range < 1.0e-4f) {
+            return 0.0f;
+        }
+        return (layer.radius() - MIN_LAYER_RADIUS) / range * RING_CONVERGE_STAGGER_TICKS;
+    }
+
+    /** Fast at first, decelerating to a rest — not linear. */
+    private static float easeOutCubic(float p) {
+        float inv = 1.0f - p;
+        return 1.0f - inv * inv * inv;
+    }
+
+    /**
+     * Extra angular travel (degrees) on top of the steady rotationSpeed*t progression: the closed-
+     * form integral of speed*(RING_CONVERGE_SPIN_MULT-1)*(1-t/C)^3 from 0 to t (C =
+     * RING_CONVERGE_TICKS), i.e. the same cubic ease-out curve as the radius, applied to angular
+     * velocity instead of position. Continuous and exactly zero once t >= C — not staggered
+     * per-layer (unlike radius/alpha), so every layer's spin-up reads as one shared pulse. Only
+     * the sign/magnitude of the layer's own rotationSpeed feeds in, so direction and each layer's
+     * relative speed ratio are preserved; this only adds a transient bonus on top.
+     */
+    private static float convergeSpinBonusDegrees(float rotationSpeed, int activeTicks, float partialTicks) {
+        float t = Math.min(activeTicks + partialTicks, (float) RING_CONVERGE_TICKS);
+        if (t <= 0.0f) {
+            return 0.0f;
+        }
+        float p = t / RING_CONVERGE_TICKS;
+        float oneMinusP = 1.0f - p;
+        float oneMinusP4 = oneMinusP * oneMinusP * oneMinusP * oneMinusP;
+        float integral = (RING_CONVERGE_TICKS / 4.0f) * (1.0f - oneMinusP4);
+        return rotationSpeed * (RING_CONVERGE_SPIN_MULT - 1.0f) * integral;
+    }
+
+    private static void renderLayer(RingLayer layer, int layerIndex, UUID uuid, int tickCount, int activeTicks,
+                                     float partialTicks, float fadeOutAlpha, float shrink,
                                      PoseStack poseStack, MultiBufferSource buffer) {
         float jitter = stableJitterDegrees(uuid, layerIndex, layer.startAngleJitter());
-        float angleDeg = jitter + layer.rotationSpeed() * (tickCount + partialTicks);
+        float baseAngleDeg = jitter + layer.rotationSpeed() * (tickCount + partialTicks);
+        float spinBonusDeg = convergeSpinBonusDegrees(layer.rotationSpeed(), activeTicks, partialTicks);
+        float angleDeg = baseAngleDeg + spinBonusDeg;
 
-        float outer = layer.radius() * shrink;
-        float inner = layer.innerRadius() * shrink;
+        float convergeP = layerConvergeProgress(layer, activeTicks, partialTicks);
+        float convergeEased = easeOutCubic(convergeP);
+        float convergeMult = RING_CONVERGE_START_RADIUS_MULT
+                + (1.0f - RING_CONVERGE_START_RADIUS_MULT) * convergeEased;
+
+        float outer = layer.radius() * convergeMult * shrink;
+        float inner = layer.innerRadius() * convergeMult * shrink;
 
         float r = ((layer.tintRGB() >> 16) & 0xFF) / 255.0f;
         float g = ((layer.tintRGB() >> 8) & 0xFF) / 255.0f;
         float b = (layer.tintRGB() & 0xFF) / 255.0f;
-        float a = layer.alpha() * fadeAlpha;
+        // Alpha fade-in driven by the exact same eased progress as the radius, so they resolve
+        // together, per spec.
+        float a = layer.alpha() * convergeEased * fadeOutAlpha;
 
         poseStack.pushPose();
         poseStack.translate(0.0, layer.yOffset(), 0.0);
