@@ -1,8 +1,13 @@
-# bhspellsx — Phase 0 Forge addon bootstrap
+# bhspellsx — Forge addon bootstrap for bhspellsx:embracing_bosom
 
 Read this first. `bhspellsx` is a throwaway bootstrap project: a real, buildable Forge mod
 used to develop and test new spell content against the real modpack API surface before it
-gets folded into the actual `bhspells` mod by the team lead (see `MERGE.md`).
+gets folded into the actual `bhspells` mod by the team lead (see `MERGE.md`). It currently
+holds one complete spell, `bhspellsx:embracing_bosom` — a ground-targeted support zone with
+mechanics (heal/buff/damage-reduction/debuff-shortening), a full custom VFX stack (a
+five-layer rotating ring renderer, a traveloptics particle column, and two custom ambient
+particle types), and a real buff icon. See `MERGE.md` for the exact file list and merge
+procedure; this file is the technical "how it works and why" reference.
 
 ---
 
@@ -42,9 +47,11 @@ the spell's constructor — not part of `DefaultConfig`. `DefaultConfig` build c
 
 **All source lives under `net.offkung.bhspellsx`. Subpackage names mirror `bhspells`
 exactly.** Portable classes (`spells/`, `entity/`, `effect/`, `event/`, `client/particle/`,
-etc.) are merge targets — written as if they already lived inside the real `bhspells` mod,
-modulo the namespace. The mod entrypoint (`BHSpellsX`, `BHSpellsXClient`) and the
-`registry/` package are throwaway wiring, deleted at merge time.
+`client/renderer/`) are merge targets — written as if they already lived inside the real
+`bhspells` mod, modulo the namespace. The mod entrypoint (`BHSpellsX`, `BHSpellsXClient`) and
+the `registry/` package (including `BHXParticleRegistry`) are throwaway wiring, deleted at
+merge time. See `MERGE.md` for the exact current file list — it's kept in sync with what's
+actually portable, more precisely than this paragraph.
 
 **NEVER declare a package under `net.offkung.bhspells`** (no trailing `x`). JPMS forbids
 two modules exporting the same package — `bhspellsx` and the real `bhspells` mod loaded
@@ -151,6 +158,98 @@ Static-method calls resolve by exact descriptor at compile time (no virtual disp
 the SRG-name risk that forced irons_spellbooks/irons_lib onto CurseMaven does **not** apply
 here — traveloptics stays flat-dir in `libs/`. Re-verify this reasoning if a future phase
 ever needs to *extend* a traveloptics class instead of just calling its static methods.
+
+## Ring renderer, custom RenderType, and the Oculus/Iris constraint (Phase 2A)
+
+`client/renderer/EmbracingBosomRingRenderer.java` draws the five-layer rotating ring VFX
+directly (no GeckoLib, no model file — a ring can't be built from Blockbench cubes). Layer
+config (texture, radius, inner radius, rotation speed, alpha, tint, y-offset) lives in the
+immutable `client/renderer/RingLayer.java` record, retunable without touching rendering
+code. Mesh is built fresh every frame with no per-segment heap allocation — see the triangle
+count comment in `buildAnnulus()` before adding more segments or layers.
+
+**⚠️ The custom `RenderType` in `buildRingRenderType()` is not incidental complexity — it is
+required, and easy to break by "simplifying." Full detail is in the class's own javadoc;
+this is the summary. Read the javadoc before changing the shader, vertex format, or any
+`RenderStateShard` in that method.**
+
+Short version of what happened, in order:
+1. **First attempt** used `RenderType.eyes(texture)`. Two real bugs, both found by decompiling
+   the actual bytecode, not guessed: `eyes()` never sets a `CullStateShard`, so it inherits
+   the builder default of "leave whatever cull state is already active" — i.e. it does NOT
+   disable culling despite looking like an emissive/additive type that should. And its
+   `ADDITIVE_TRANSPARENCY` uses `blendFunc(ONE, ONE)` — source factor `ONE`, not `SRC_ALPHA`
+   — so per-vertex alpha was silently discarded at the blend stage; fades and per-layer alpha
+   would have been visually inert even once the mesh was visible. Both root-caused by
+   decompiling `RenderType`/`RenderStateShard`, not from memory or assumption.
+2. **Fixed those two bugs** with a hand-built `CompositeState` (explicit `CullStateShard(false)`,
+   a custom `SRC_ALPHA/ONE` transparency shard — still additive/never-darkens, but now
+   alpha-aware) on top of `GameRenderer.getPositionColorTexShader()`. This rendered correctly
+   with no shaderpack loaded — and was **completely invisible under Oculus/Iris**, with no
+   error, since it looks identical to broken code from a testing standpoint if you never load
+   a shaderpack.
+3. **Root-caused by disassembling the actual `oculus-mc1.20.1-*.jar` Mixins shipped in this
+   modpack** (not guessed, not inferred from Iris's public docs): Iris does not generically
+   intercept custom RenderTypes/shaders. One Mixin (`MixinGameRenderer`) `@Inject`s into ~27
+   *specific* `GameRenderer.get*Shader()` getters by exact method identity, each routed (when
+   a shaderpack is active) to one of a closed, fixed `ShaderKey` enum of real deferred
+   gbuffers programs. Anything not on that list gets no shaderpack routing.
+   `getPositionColorTexShader()` *is* on the list, but its override always routes to
+   `ShaderKey.TEXTURED_COLOR` (a generic 2D/UI-quad program) regardless of context — not the
+   terrain→entities→translucent→composite chain a world-space effect needs to land in. That
+   mismatch is why it disappeared under Iris.
+4. **Fixed** by switching the shader to `GameRenderer.getRendertypeEntityTranslucentEmissiveShader()`
+   (the same `ShaderInstance` vanilla's `RenderType.entityTranslucentEmissive()` uses) and the
+   vertex format to `NEW_ENTITY`. Confirmed via the same Mixin disassembly that this exact
+   shader routes to `ShaderKey.ENTITIES_EYES_TRANS` — a real, alpha-blended, entity-context
+   deferred gbuffer stage — during normal entity rendering. (For reference: irons_spellbooks'
+   own ground-magic-glow RenderTypes use `getRendertypeEnergySwirlShader()`, which Iris routes
+   to `ShaderKey.ENTITIES_CUTOUT` — a real stage too, but binary-alpha-discard, which would
+   have wrecked this effect's fades and soft haze layers. Rejected for that reason, not
+   because it's wrong in general.) This shader also actually samples the overlay texture
+   (`texelFetch(Sampler1, UV1, 0)`), unlike every shader tried before it — `OverlayStateShard`
+   has to be `true` with a real `OverlayTexture.NO_OVERLAY` UV1 coordinate, or it samples an
+   unbound texture unit.
+
+**If a shader/RenderType change ever seems necessary here, re-verify against Iris's actual
+compiled Mixin classes (decompile the installed Oculus jar's `MixinGameRenderer`,
+`ShaderKey`, `ProgramId`) — the same way this was originally root-caused. Do not assume a
+"more normal-looking" RenderType is safe just because it renders fine without a shaderpack
+loaded; that tells you nothing about the Iris case.** See `MERGE.md`'s warning section too —
+this is the single highest-risk thing in the whole handover.
+
+One accepted trade-off from step 4: this shader applies vanilla's fake directional entity
+lighting (`minecraft_mix_light`) rather than being purely emissive — since the ring mesh has
+a fixed straight-up normal, this is one uniform brightness multiplier across the whole mesh
+(not spatially varying), floored so it stays visible in caves/at night, but dimmer than true
+full-bright. Compensated for with higher per-layer alpha values in `RingLayer`'s config, not
+by fighting the shader.
+
+## Phase 2C: custom ambient particles (leaves and motes)
+
+`client/particle/EmbraceLeafParticle.java` and `EmbraceMoteParticle.java` (each with an
+inner `Provider`) are ordinary `TextureSheetParticle` subclasses, modelled directly on
+bhspells' own `OakLeafParticle`/`GoldSparkleParticle` (constructor/tick/`getRenderType()`
+shape, the small per-tick horizontal sway, the friction/lifetime jitter). `EmbraceLeafParticleOption`
+and `EmbraceMoteParticleOption` are tintable `ParticleOptions` implementations — color-only
+`Codec`/`Deserializer`/network plumbing, following bhspells' `ColoredCherryParticleOption`
+pattern exactly, registered via `registry/BHXParticleRegistry.java`. This lets the palette
+stay retunable from code (`AMBER_TINT` in `EmbracingBosomAoe`) without touching the particle
+classes or their JSON.
+
+Both particle types are registered client-side in `BHSpellsXClient`'s
+`onRegisterParticleProviders` (`RegisterParticleProvidersEvent` → `registerSpriteSet`) — a
+**separate** event handler from the entity renderer registration; easy to forget when
+copying this pattern elsewhere, since a missed `registerSpriteSet` call fails silently (the
+`ParticleType` still registers fine, the particle just never renders — no crash, no log).
+
+Emission is entirely server-side, from `EmbracingBosomAoe.tick()` — not from the particle
+classes themselves. Positions are sampled uniformly across the zone's disc (sqrt-distributed
+radius, not vanilla's box-jitter) via one `ServerLevel#sendParticles` call per particle, so
+placement matches the actual circular zone rather than approximating it with a square.
+Emission rate for both types tapers linearly to zero over the AoE's last 20 ticks — same
+window `EmbracingBosomRingRenderer` fades the ring over, so everything winds down together
+rather than particles cutting off hard while the ring is still visibly fading.
 
 ## Known quirk: `/effect give` prints a false failure message on a shortened debuff
 
