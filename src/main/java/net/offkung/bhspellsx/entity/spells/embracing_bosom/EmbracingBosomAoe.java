@@ -13,6 +13,9 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.level.Level;
+import net.minecraft.server.level.ServerLevel;
+import net.offkung.bhspellsx.client.particle.EmbraceLeafParticleOption;
+import net.offkung.bhspellsx.client.particle.EmbraceMoteParticleOption;
 import net.offkung.bhspellsx.registry.BHXEntityRegistry;
 import net.offkung.bhspellsx.registry.BHXMobEffectRegistry;
 import org.joml.Vector3f;
@@ -96,6 +99,16 @@ public class EmbracingBosomAoe extends AoeEntity {
     // class javadoc); kept modest since it's only meant to sit and glow near the base, not rise.
     private static final double COLUMN_DUST_SPEED = 0.02;
 
+    // Phase 2C: ambient leaves/motes (reference image 4), on top of the Phase 2B column above.
+    // Emitted every LEAF/MOTE_INTERVAL_TICKS via a random roll gated by fadeTaper(), so density
+    // ramps down smoothly over the last PARTICLE_FADE_TAPER_TICKS instead of cutting off hard —
+    // that window intentionally matches EmbracingBosomRingRenderer's own FADE_OUT_TICKS, so the
+    // rings and the ambient particles fade out together.
+    // 1/5 ticks = ~4/sec (LEAF, low density) and 1/2 ticks = ~10/sec (MOTE, higher density).
+    private static final int LEAF_INTERVAL_TICKS = 5;
+    private static final int MOTE_INTERVAL_TICKS = 2;
+    private static final int PARTICLE_FADE_TAPER_TICKS = 20;
+
     public EmbracingBosomAoe(EntityType<? extends Projectile> entityType, Level level) {
         super(entityType, level);
         this.setNoGravity(true);
@@ -128,6 +141,7 @@ public class EmbracingBosomAoe extends AoeEntity {
         if (activeTicks % COLUMN_INTERVAL_TICKS == 0) {
             spawnColumnTick();
         }
+        spawnAmbientParticlesTick(activeTicks);
         applyBuffToNearbyTargets();
     }
 
@@ -177,6 +191,43 @@ public class EmbracingBosomAoe extends AoeEntity {
         AdvancedCylinderParticleManager.spawnParticles(this.level(), this.position(),
                 COLUMN_DUST_PER_CALL, AMBER_DUST, ParticleDirection.UPWARD,
                 COLUMN_RADIUS, COLUMN_HEIGHT, 0.0, 0.0, 0.0, COLUMN_DUST_SPEED, false);
+    }
+
+    private void spawnAmbientParticlesTick(int activeTicks) {
+        if (!(this.level() instanceof ServerLevel serverLevel)) {
+            return;
+        }
+        float taper = particleFadeTaper(activeTicks);
+        if (taper <= 0.0f) {
+            return;
+        }
+        if (activeTicks % LEAF_INTERVAL_TICKS == 0 && this.random.nextFloat() < taper) {
+            spawnAmbientParticle(serverLevel, new EmbraceLeafParticleOption(AMBER_TINT));
+        }
+        if (activeTicks % MOTE_INTERVAL_TICKS == 0 && this.random.nextFloat() < taper) {
+            spawnAmbientParticle(serverLevel, new EmbraceMoteParticleOption(AMBER_TINT));
+        }
+    }
+
+    /** 1.0 through the steady-state lifetime, ramping linearly to 0 over the last
+     *  PARTICLE_FADE_TAPER_TICKS — mirrors EmbracingBosomRingRenderer's own fade-out curve. */
+    private static float particleFadeTaper(int activeTicks) {
+        int fadeStart = LIFETIME_TICKS - PARTICLE_FADE_TAPER_TICKS;
+        if (activeTicks <= fadeStart) {
+            return 1.0f;
+        }
+        return Math.max(0.0f, 1.0f - (activeTicks - fadeStart) / (float) PARTICLE_FADE_TAPER_TICKS);
+    }
+
+    /** Uniformly random point inside the zone's disc (sqrt-distributed radius, not a naive
+     *  linear one, so points don't bunch up near the centre), spawned just above ground. */
+    private void spawnAmbientParticle(ServerLevel serverLevel, ParticleOptions options) {
+        double angle = this.random.nextDouble() * Math.PI * 2.0;
+        double dist = Math.sqrt(this.random.nextDouble()) * RADIUS;
+        double x = this.getX() + Math.cos(angle) * dist;
+        double z = this.getZ() + Math.sin(angle) * dist;
+        double y = this.getY() + 0.05;
+        serverLevel.sendParticles(options, x, y, z, 1, 0.0, 0.0, 0.0, 0.0);
     }
 
     @Override

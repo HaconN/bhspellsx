@@ -9,6 +9,7 @@ import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.offkung.bhspellsx.event.EmbracingBosomEvents;
 import net.offkung.bhspellsx.registry.BHXEntityRegistry;
 import net.offkung.bhspellsx.registry.BHXMobEffectRegistry;
+import net.offkung.bhspellsx.registry.BHXParticleRegistry;
 import net.offkung.bhspellsx.registry.BHXSpellRegistry;
 import org.slf4j.Logger;
 
@@ -28,6 +29,7 @@ public class BHSpellsX {
         BHXSpellRegistry.register(modEventBus);
         BHXEntityRegistry.register(modEventBus);
         BHXMobEffectRegistry.register(modEventBus);
+        BHXParticleRegistry.register(modEventBus);
         // EmbracingBosomEvents is portable content (no modid baked in) — registered manually
         // here rather than via @Mod.EventBusSubscriber, matching bhspells' own house style
         // (see BypassDamageEvent/SwordDashManager in the real bhspells mod).
