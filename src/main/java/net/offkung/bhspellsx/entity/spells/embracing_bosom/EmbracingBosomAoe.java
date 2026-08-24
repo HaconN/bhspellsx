@@ -83,11 +83,13 @@ public class EmbracingBosomAoe extends AoeEntity {
     //   - END_ROD carries the actual rising motion, undamped velocity, ~3s lifetime.
     //   - AMBER_DUST adds sparse colour near the base (short-lived/near-static, but still
     //     visible while it lasts).
-    // Every 5 ticks: 2 END_ROD + 1 AMBER_DUST = 3 particles/call = 12 particles/sec total,
-    // sustained for 160 ticks — same overall density as before, just reallocated between the
-    // two types instead of increased.
+    // Every 5 ticks: 1 END_ROD + 1 AMBER_DUST = 2 particles/call = 8 particles/sec total.
+    // END_ROD halved from its original Phase 2B count (was 2/call) now that Phase 2C's amber
+    // MOTE particles exist — the cold white column used to be the only rising/glowing element
+    // and dominated the frame; it's now a subtle vertical accent behind the warm motes rather
+    // than competing with them. AMBER_DUST is untouched.
     private static final int COLUMN_INTERVAL_TICKS = 5;
-    private static final int COLUMN_END_ROD_PER_CALL = 2;
+    private static final int COLUMN_END_ROD_PER_CALL = 1;
     private static final int COLUMN_DUST_PER_CALL = 1;
     private static final double COLUMN_RADIUS = 1.5;
     private static final double COLUMN_HEIGHT = 2.5;
@@ -100,13 +102,16 @@ public class EmbracingBosomAoe extends AoeEntity {
     private static final double COLUMN_DUST_SPEED = 0.02;
 
     // Phase 2C: ambient leaves/motes (reference image 4), on top of the Phase 2B column above.
-    // Emitted every LEAF/MOTE_INTERVAL_TICKS via a random roll gated by fadeTaper(), so density
-    // ramps down smoothly over the last PARTICLE_FADE_TAPER_TICKS instead of cutting off hard —
-    // that window intentionally matches EmbracingBosomRingRenderer's own FADE_OUT_TICKS, so the
-    // rings and the ambient particles fade out together.
-    // 1/5 ticks = ~4/sec (LEAF, low density) and 1/2 ticks = ~10/sec (MOTE, higher density).
-    private static final int LEAF_INTERVAL_TICKS = 5;
-    private static final int MOTE_INTERVAL_TICKS = 2;
+    // Emitted every LEAF/MOTE_INTERVAL_TICKS (MOTE in bursts of MOTE_PER_BURST) via a random roll
+    // gated by particleFadeTaper(), so density ramps down smoothly over the last
+    // PARTICLE_FADE_TAPER_TICKS instead of cutting off hard — that window intentionally matches
+    // EmbracingBosomRingRenderer's own FADE_OUT_TICKS, so the rings and the ambient particles fade
+    // out together.
+    // 1/8 ticks = 2.5/sec (LEAF, low density). 4 every 5 ticks = 16/sec (MOTE — now the dominant
+    // airborne element now that the END_ROD column has stepped back, see COLUMN_END_ROD_PER_CALL).
+    private static final int LEAF_INTERVAL_TICKS = 8;
+    private static final int MOTE_INTERVAL_TICKS = 5;
+    private static final int MOTE_PER_BURST = 4;
     private static final int PARTICLE_FADE_TAPER_TICKS = 20;
 
     public EmbracingBosomAoe(EntityType<? extends Projectile> entityType, Level level) {
@@ -205,7 +210,9 @@ public class EmbracingBosomAoe extends AoeEntity {
             spawnAmbientParticle(serverLevel, new EmbraceLeafParticleOption(AMBER_TINT));
         }
         if (activeTicks % MOTE_INTERVAL_TICKS == 0 && this.random.nextFloat() < taper) {
-            spawnAmbientParticle(serverLevel, new EmbraceMoteParticleOption(AMBER_TINT));
+            for (int i = 0; i < MOTE_PER_BURST; i++) {
+                spawnAmbientParticle(serverLevel, new EmbraceMoteParticleOption(AMBER_TINT));
+            }
         }
     }
 

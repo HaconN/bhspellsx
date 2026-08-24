@@ -15,7 +15,8 @@ import net.minecraft.client.particle.TextureSheetParticle;
  * per EmbraceLeafParticleOption instead of a fixed colour.
  */
 public class EmbraceLeafParticle extends TextureSheetParticle {
-    private static final float BASE_QUAD_SIZE = 0.35f;
+    // 0.22 = ~63% of the original 0.35 — that read as solid brown blobs rather than thin leaves.
+    private static final float BASE_QUAD_SIZE = 0.22f;
     private static final int MIN_LIFETIME_TICKS = 90;
     private static final int LIFETIME_VARIANCE_TICKS = 40;
     // Negative gravity: drifts upward rather than falling, per spec.
