@@ -124,8 +124,10 @@ public class EmbracingBosomRingRenderer extends EntityRenderer<EmbracingBosomAoe
 
     private static final String RING_TEX_PATH = "textures/entity/ring/";
 
-    // Reuse the exact tint from Phase 2B — do not introduce a second colour constant.
-    private static final int AMBER_TINT_HEX = 0xF0B23D;
+    // Deep, saturated amber/burnt-orange — approved by the power's owner. This is the default
+    // tint for any layer that doesn't set its own RingLayer.tintOverrideRGB (see highlight_rim
+    // below for the one layer that does).
+    private static final int AMBER_TINT_HEX = 0xC96A14;
 
     // 48 radial segments per layer, drawn as 48 quads (2 triangles each) = 96 triangles/layer.
     // 5 layers in the starting stack -> 480 triangles/frame while a ring is up, rebuilt fresh
@@ -143,18 +145,26 @@ public class EmbracingBosomRingRenderer extends EntityRenderer<EmbracingBosomAoe
     private static final float RING_CONVERGE_SPIN_MULT = 3.0f;
     private static final float RING_CONVERGE_STAGGER_TICKS = 4.0f;
 
-    // Alpha values bumped ~15-20% over the pre-Item-1 numbers (0.45/0.40/0.70/0.65/0.85) to
-    // compensate for entityTranslucentEmissive's fake directional lighting dimming the ring
-    // relative to eyes()'s pure emissive output — see class javadoc. First-pass estimate, not
-    // measured in-game; retune from a screenshot if it's still off.
+    // Colour/contrast pass, round 3: highlight_rim was invisible, not just dim, at alpha 1.0 —
+    // root cause was a UV-mapping bug (see RingLayer's javadoc and the uvScale warning in
+    // buildAnnulus() below), not brightness. As the stack's only annulus (innerRadius 5.6,
+    // radius 6.2), it only ever sampled the outer ~10% of its texture, and the new 11-arc mask's
+    // content sits well inside that unsampled region. Fixed by making it a full disc instead —
+    // the texture already has its own transparent hole in the middle, so the geometry doesn't
+    // need to cut one. vortex/cyclone's round-2 dimming was compensating for this bug, not a
+    // real problem with those layers, so it's reverted back to their round-1 values.
+    //   haze_soft / haze_patchy — unchanged, the smoke already reads well.
+    //   vortex / cyclone — reverted to 0.62/0.57.
+    //   highlight_rim — innerRadius 5.6 -> 0 (full disc). Round 4: at alpha 1.0 / 0xFFCE73 the
+    //     arcs overshot — too bright/thick/pale, reading as a separate white layer instead of
+    //     the vortex's own highlights. Pulled back to alpha 0.55 and tint 0xF5B34E (still
+    //     lighter than the base amber, but amber rather than near-white) so they integrate.
     private static final List<RingLayer> LAYERS = List.of(
-            new RingLayer(ring("haze_soft"), 6.0f, 0.0f, 1.8f, 360f, 0.54f, AMBER_TINT_HEX, 0.02f),
-            new RingLayer(ring("haze_patchy"), 5.4f, 0.0f, -2.7f, 360f, 0.48f, AMBER_TINT_HEX, 0.04f),
-            new RingLayer(ring("vortex"), 6.0f, 0.0f, -7.2f, 360f, 0.82f, AMBER_TINT_HEX, 0.06f),
-            new RingLayer(ring("cyclone"), 4.2f, 0.0f, 12.6f, 360f, 0.75f, AMBER_TINT_HEX, 0.08f),
-            // Thin bright annulus rather than a full disc, matching the "rim" name/role. Smaller
-            // bump here — it was already near the top of the range.
-            new RingLayer(ring("highlight_rim"), 6.2f, 5.6f, -5.4f, 360f, 0.90f, AMBER_TINT_HEX, 0.10f));
+            new RingLayer(ring("haze_soft"), 6.0f, 0.0f, 1.8f, 360f, 0.32f, 0.02f),
+            new RingLayer(ring("haze_patchy"), 5.4f, 0.0f, -2.7f, 360f, 0.29f, 0.04f),
+            new RingLayer(ring("vortex"), 6.0f, 0.0f, -7.2f, 360f, 0.62f, 0.06f),
+            new RingLayer(ring("cyclone"), 4.2f, 0.0f, 12.6f, 360f, 0.57f, 0.08f),
+            new RingLayer(ring("highlight_rim"), 6.2f, 0.0f, -5.4f, 360f, 0.55f, 0xF5B34E, 0.10f));
 
     // Drives the per-layer converge stagger (see staggerOffsetTicks()) — derived from LAYERS
     // itself so it stays correct if the stack is retuned.
@@ -320,9 +330,10 @@ public class EmbracingBosomRingRenderer extends EntityRenderer<EmbracingBosomAoe
         float outer = layer.radius() * convergeMult * shrink;
         float inner = layer.innerRadius() * convergeMult * shrink;
 
-        float r = ((layer.tintRGB() >> 16) & 0xFF) / 255.0f;
-        float g = ((layer.tintRGB() >> 8) & 0xFF) / 255.0f;
-        float b = (layer.tintRGB() & 0xFF) / 255.0f;
+        int tintRGB = layer.resolveTint(AMBER_TINT_HEX);
+        float r = ((tintRGB >> 16) & 0xFF) / 255.0f;
+        float g = ((tintRGB >> 8) & 0xFF) / 255.0f;
+        float b = (tintRGB & 0xFF) / 255.0f;
         // Alpha fade-in driven by the exact same eased progress as the radius, so they resolve
         // together, per spec.
         float a = layer.alpha() * convergeEased * fadeOutAlpha;
@@ -346,6 +357,13 @@ public class EmbracingBosomRingRenderer extends EntityRenderer<EmbracingBosomAoe
     private static void buildAnnulus(VertexConsumer consumer, Matrix4f positionMatrix, Matrix3f normalMatrix,
                                       float outer, float inner, float r, float g, float b, float a) {
         // uv normalized against the outer radius so the texture centre sits at the ring centre.
+        // ⚠️ This maps UV across the full disc [0, outer] regardless of `inner` — it does NOT
+        // remap to the annulus's own [inner, outer] band. An annulus layer (innerRadius > 0)
+        // therefore only ever samples the outer 1-(inner/outer) fraction of the texture; content
+        // painted further toward the texture's own centre is never drawn (invisible, not dim).
+        // This is a real bug, deliberately not fixed here — see RingLayer's javadoc for the full
+        // writeup and why (highlight_rim was the only annulus in the stack and hit exactly this;
+        // it's a full disc now). RingLayer warns at construction time if innerRadius > 0.
         float uvScale = outer > 1.0e-4f ? 1.0f / (2.0f * outer) : 0.0f;
 
         float prevCos = Mth.cos(0.0f);
