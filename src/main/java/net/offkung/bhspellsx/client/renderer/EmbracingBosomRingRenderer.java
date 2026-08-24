@@ -120,13 +120,13 @@ public class EmbracingBosomRingRenderer extends EntityRenderer<EmbracingBosomAoe
     // relative to eyes()'s pure emissive output — see class javadoc. First-pass estimate, not
     // measured in-game; retune from a screenshot if it's still off.
     private static final List<RingLayer> LAYERS = List.of(
-            new RingLayer(ring("haze_soft"), 6.0f, 0.0f, 2.0f, 360f, 0.54f, AMBER_TINT_HEX, 0.02f),
-            new RingLayer(ring("haze_patchy"), 5.4f, 0.0f, -3.0f, 360f, 0.48f, AMBER_TINT_HEX, 0.04f),
-            new RingLayer(ring("vortex"), 6.0f, 0.0f, -8.0f, 360f, 0.82f, AMBER_TINT_HEX, 0.06f),
-            new RingLayer(ring("cyclone"), 4.2f, 0.0f, 14.0f, 360f, 0.75f, AMBER_TINT_HEX, 0.08f),
+            new RingLayer(ring("haze_soft"), 6.0f, 0.0f, 1.8f, 360f, 0.54f, AMBER_TINT_HEX, 0.02f),
+            new RingLayer(ring("haze_patchy"), 5.4f, 0.0f, -2.7f, 360f, 0.48f, AMBER_TINT_HEX, 0.04f),
+            new RingLayer(ring("vortex"), 6.0f, 0.0f, -7.2f, 360f, 0.82f, AMBER_TINT_HEX, 0.06f),
+            new RingLayer(ring("cyclone"), 4.2f, 0.0f, 12.6f, 360f, 0.75f, AMBER_TINT_HEX, 0.08f),
             // Thin bright annulus rather than a full disc, matching the "rim" name/role. Smaller
             // bump here — it was already near the top of the range.
-            new RingLayer(ring("highlight_rim"), 6.2f, 5.6f, -6.0f, 360f, 0.90f, AMBER_TINT_HEX, 0.10f));
+            new RingLayer(ring("highlight_rim"), 6.2f, 5.6f, -5.4f, 360f, 0.90f, AMBER_TINT_HEX, 0.10f));
 
     private static ResourceLocation ring(String name) {
         return ResourceLocation.fromNamespaceAndPath("bhspellsx", RING_TEX_PATH + name + ".png");
