@@ -288,3 +288,25 @@ later for other reasons, revisit this.
 effectively-infinite-but-technically-finite roleplay durations) and passes those straight
 through untouched — no deny, no shortening. This server is used for staff to apply infinite
 effects for scene purposes; breaking that is worse than the cosmetic message above.
+
+---
+
+## Every `BHXEntityRegistry` entity type MUST have a client renderer registered
+
+Registering an `EntityType` in `BHXEntityRegistry` is not enough on its own — it also needs a
+matching `event.registerEntityRenderer(...)` call in `BHSpellsXClient.onRegisterRenderers`. Miss
+it and the client crashes with a `NullPointerException` in `EntityRenderDispatcher.getRenderer`
+("entityrenderer is null") the moment an instance of that entity comes into view — and since the
+entity persists in the chunk, the world **keeps crashing on load** every time you rejoin, until
+the entity naturally despawns/expires server-side. Happened for real with
+`AMETHYST_DECREE_AOE` (added to the registry, never wired to a renderer).
+
+For an entity with no visuals of its own (all VFX driven by particles/sound spawned from its own
+`tick()`, no model), register vanilla `net.minecraft.client.renderer.entity.NoopRenderer::new` —
+**not** a hand-rolled no-op renderer class. This is bhspells' own actual convention, verified by
+decompiling its deployed client setup (`BHSpellsClient.rendererRegister`): every invisible AoE
+entity (`DARK_RAIN_FALL`, `PURPLE_WAVE_PROJECTILE`, `RAIN_VOLLEY`, `FIRE_SLASH_PROJECTILE`) uses
+vanilla `NoopRenderer`, never a custom equivalent, and it never skips registration — "does the
+entity need syncing to clients at all" was checked and the answer is yes, always register
+something. A prior custom `client/renderer/NoopEntityRenderer.java` in this repo was dead code
+(never wired to any entity) and has been deleted for this reason — don't reintroduce one.

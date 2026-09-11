@@ -1,5 +1,6 @@
 package net.offkung.bhspellsx;
 
+import net.minecraft.client.renderer.entity.NoopRenderer;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.EntityRenderersEvent;
 import net.minecraftforge.client.event.RegisterParticleProvidersEvent;
@@ -20,6 +21,12 @@ public class BHSpellsXClient {
     @SubscribeEvent
     public static void onRegisterRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerEntityRenderer(BHXEntityRegistry.EMBRACING_BOSOM_AOE.get(), EmbracingBosomRingRenderer::new);
+        // Phase 1: no custom VFX yet, so a no-render renderer — same as bhspells' own house
+        // pattern for its invisible AoE entities (DARK_RAIN_FALL, PURPLE_WAVE_PROJECTILE, etc.
+        // all use vanilla NoopRenderer, not a hand-rolled one). Still required to register
+        // *something* — Forge crashes on the client the moment an instance of an unrendered
+        // custom EntityType spawns without one.
+        event.registerEntityRenderer(BHXEntityRegistry.AMETHYST_DECREE_AOE.get(), NoopRenderer::new);
     }
 
     @SubscribeEvent

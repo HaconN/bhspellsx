@@ -243,8 +243,8 @@ public class EmbracingBosomRingRenderer extends EntityRenderer<EmbracingBosomAoe
             renderLayer(LAYERS.get(i), i, uuid, entity.tickCount, activeTicks, partialTicks, fadeOutAlpha, shrink,
                     poseStack, buffer);
         }
-        // Intentionally no super.render() call — same as the NoopEntityRenderer this replaces,
-        // this entity has no model/nametag/shadow to fall back on.
+        // Intentionally no super.render() call — this entity has no model/nametag/shadow to
+        // fall back on.
     }
 
     /** 1.0 until the last FADE_OUT_TICKS of the AoE's life, then ramps linearly to 0. Unchanged
