@@ -1,13 +1,21 @@
-# bhspellsx — Forge addon bootstrap for bhspellsx:embracing_bosom
+# bhspellsx — Forge addon bootstrap, diverging fork of work already merged into bhspells
 
 Read this first. `bhspellsx` is a throwaway bootstrap project: a real, buildable Forge mod
 used to develop and test new spell content against the real modpack API surface before it
-gets folded into the actual `bhspells` mod by the team lead (see `MERGE.md`). It currently
-holds one complete spell, `bhspellsx:embracing_bosom` — a ground-targeted support zone with
-mechanics (heal/buff/damage-reduction/debuff-shortening), a full custom VFX stack (a
-five-layer rotating ring renderer, a traveloptics particle column, and two custom ambient
-particle types), and a real buff icon. See `MERGE.md` for the exact file list and merge
-procedure; this file is the technical "how it works and why" reference.
+gets folded into the actual `bhspells` mod by the team lead (see `MERGE.md`).
+
+**As of bhspells 1.3.0, this repo is a diverging fork, not the sole source of new content.**
+The IT lead has already merged our earlier `embracing_bosom` work into his own `bhspells` mod
+(mod id `bhspells`, package `net.offkung.bhspells`) and released it as
+`bhspells-1.20.1-1.3.0-forge.jar`. New spells written here (starting with
+`amethyst_decree`) are handed to him as files for a future merge, same as before — but his
+own `bhspells` now contains spells we don't have source for, organised **by element school**
+(`spells/gold/`, `spells/ground/`, `spells/nature/`, `spells/fire/`, `spells/lightning/`),
+confirmed by decompiling his jar. Match that layout for new spells in this repo — do not
+group by character.
+
+See `MERGE.md` for the exact file list and merge procedure; this file is the technical
+"how it works and why" reference.
 
 ---
 
@@ -22,11 +30,14 @@ procedure; this file is the technical "how it works and why" reference.
 | irons_lib | 1.20.1-1.0.2 |
 | geckolib | 4.8.3 |
 | traveloptics | 6.3.0-1.20.1 |
-| bhspells | 1.20.1-1.1.4-forge |
+| bhspells | 1.20.1-1.3.0-forge |
 
 Source of truth for this table: recon against
 `D:\Game\Modrinth App\profiles\Minguye Origins Work 1.0.1\mods` — re-verify against that
-directory (not memory) before bumping any version here.
+directory (not memory) before bumping any version here. bhspells 1.3.0 is decompiled for
+reference (read-only, not committed) at
+`Origins\Mods\_reference\bhspells-1.3.0-decompiled\` — see that folder before guessing at
+his conventions again.
 
 ## The one hard rule: never touch `api/backwards_compat/`
 

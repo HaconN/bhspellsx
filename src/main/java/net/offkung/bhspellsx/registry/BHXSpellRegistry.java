@@ -5,6 +5,7 @@ import io.redspace.ironsspellbooks.api.spells.AbstractSpell;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.RegistryObject;
+import net.offkung.bhspellsx.spells.gold.AmethystDecreeSpell;
 import net.offkung.bhspellsx.spells.ground.EmbracingBosomSpell;
 
 /**
@@ -18,6 +19,9 @@ public class BHXSpellRegistry {
 
     public static final RegistryObject<AbstractSpell> EMBRACING_BOSOM =
             registerSpell(new EmbracingBosomSpell());
+
+    public static final RegistryObject<AbstractSpell> AMETHYST_DECREE =
+            registerSpell(new AmethystDecreeSpell());
 
     private static RegistryObject<AbstractSpell> registerSpell(AbstractSpell spell) {
         return SPELLS.register(spell.getSpellName(), () -> spell);
