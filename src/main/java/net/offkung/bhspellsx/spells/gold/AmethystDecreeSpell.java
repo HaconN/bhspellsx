@@ -16,8 +16,10 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
-import net.offkung.bhspellsx.config.AmethystDecreeConfig;
+import net.offkung.bhspellsx.client.renderer.crystal.AmethystDecreeSounds;
+import net.offkung.bhspellsx.entity.spells.amethyst_decree.AmethystDecreeConstants;
 import net.offkung.bhspellsx.entity.spells.amethyst_decree.AmethystDecreeAoe;
+import net.offkung.bhspellsx.entity.spells.amethyst_decree.AmethystDecreeCasterRingEntity;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -35,7 +37,7 @@ import java.util.List;
  * not a runtime one; nothing else in this repo requires it to be loaded).
  * <p>
  * Damage is intentionally NOT derived from getSpellPower()/spellLevel anywhere in this spell or
- * in AmethystDecreeAoe — every number is a fixed config value (see AmethystDecreeConfig).
+ * in AmethystDecreeAoe — every number is a hardcoded constant (see AmethystDecreeConstants).
  * baseSpellPower/spellPowerPerLevel below are set to 0 and unused for that reason, kept only
  * because AbstractSpell expects them to be set in the constructor.
  */
@@ -67,7 +69,7 @@ public class AmethystDecreeSpell extends AbstractSpell {
     @Override
     public List<MutableComponent> getUniqueInfo(int spellLevel, LivingEntity caster) {
         return List.of(Component.translatable("ui.irons_spellbooks.damage",
-                AmethystDecreeConfig.BURST_DAMAGE.get()));
+                AmethystDecreeConstants.BURST_DAMAGE));
     }
 
     @Override
@@ -127,5 +129,21 @@ public class AmethystDecreeSpell extends AbstractSpell {
         aoe.setPos(entity.position());
         level.addFreshEntity(aoe);
         super.onCast(level, spellLevel, entity, castSource, playerMagicData);
+    }
+
+    /** Phase 2 VFX only — spawns the caster-ring crystal entity at the moment the 1s channel
+     *  actually starts (not cast completion; onCast above is unchanged). Confirmed via decompile
+     *  that this is the correct once-only cast-start hook for a player-cast spell: CastCommand
+     *  routes a ServerPlayer target through AbstractSpell.attemptInitiateCast(), which calls
+     *  onServerPreCast() exactly once, synchronously, right before starting the channel countdown
+     *  — checkPreCastConditions() is not the right hook here (it's on a different code path).
+     *  Calling super first preserves the existing cast-start sound. */
+    @Override
+    public void onServerPreCast(Level level, int spellLevel, LivingEntity entity, MagicData playerMagicData) {
+        super.onServerPreCast(level, spellLevel, entity, playerMagicData);
+        AmethystDecreeCasterRingEntity ring = new AmethystDecreeCasterRingEntity(level);
+        ring.setPos(entity.position());
+        level.addFreshEntity(ring);
+        AmethystDecreeSounds.playCastStart(level, entity.getX(), entity.getY(), entity.getZ(), entity.getRandom());
     }
 }

@@ -17,7 +17,6 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.level.Level;
 import net.minecraftforge.registries.ForgeRegistries;
-import net.offkung.bhspellsx.config.AmethystDecreeConfig;
 import net.offkung.bhspellsx.registry.BHXEntityRegistry;
 import net.offkung.bhspellsx.registry.BHXSpellRegistry;
 
@@ -54,15 +53,12 @@ public class AmethystDecreeAoe extends AoeEntity {
     public static final ResourceLocation EFN_STOP_ID = ResourceLocation.fromNamespaceAndPath("efn", "stop");
     public static final ResourceLocation CATACLYSM_STUN_ID = ResourceLocation.fromNamespaceAndPath("cataclysm", "stun");
 
-    // Vanilla purple particle (used for witches / potion-style hits) — Phase 1 placeholder only.
-    private static final int RING_VFX_POINTS = 24;
-
     private final List<UUID> dotTargets = new ArrayList<>();
 
     public AmethystDecreeAoe(EntityType<? extends Projectile> entityType, Level level) {
         super(entityType, level);
         this.setNoGravity(true);
-        this.setRadius((float) AmethystDecreeConfig.RADIUS.get().doubleValue());
+        this.setRadius((float) AmethystDecreeConstants.RADIUS);
     }
 
     public AmethystDecreeAoe(Level level) {
@@ -89,7 +85,7 @@ public class AmethystDecreeAoe extends AoeEntity {
         }
         tickDot(activeTicks);
 
-        int totalDotTicks = AmethystDecreeConfig.DOT_INTERVAL_TICKS.get() * AmethystDecreeConfig.DOT_TICK_COUNT.get();
+        int totalDotTicks = AmethystDecreeConstants.DOT_INTERVAL_TICKS * AmethystDecreeConstants.DOT_TICK_COUNT;
         if (activeTicks >= totalDotTicks) {
             this.discard();
         }
@@ -137,27 +133,34 @@ public class AmethystDecreeAoe extends AoeEntity {
         Entity owner = this.getOwner();
         List<LivingEntity> targets = this.level().getEntitiesOfClass(LivingEntity.class, this.getBoundingBox(), this::canHitEntity);
         for (LivingEntity target : targets) {
-            DamageSources.applyDamage(target, AmethystDecreeConfig.BURST_DAMAGE.get().floatValue(), getDamageSource(owner));
+            DamageSources.applyDamage(target, (float) AmethystDecreeConstants.BURST_DAMAGE, getDamageSource(owner));
             applyRootAndStun(target);
             applyDebuffs(target);
             spawnHitVfx(target);
+            spawnTargetCrystal(target);
             dotTargets.add(target.getUUID());
         }
-        if (!targets.isEmpty()) {
-            spawnCastRingVfx();
-        }
+    }
+
+    /** Phase 2 VFX: one AmethystDecreeTargetCrystalEntity per hit target — see that class for the
+     *  follow/lifetime logic. The old placeholder vanilla-particle cast ring is gone; the caster
+     *  side of the VFX is now AmethystDecreeCasterRingEntity, spawned independently at cast start
+     *  from AmethystDecreeSpell.onServerPreCast() (not here). */
+    private void spawnTargetCrystal(LivingEntity target) {
+        AmethystDecreeTargetCrystalEntity crystal = new AmethystDecreeTargetCrystalEntity(this.level(), target);
+        this.level().addFreshEntity(crystal);
     }
 
     private void tickDot(int activeTicks) {
         if (dotTargets.isEmpty()) {
             return;
         }
-        int interval = AmethystDecreeConfig.DOT_INTERVAL_TICKS.get();
+        int interval = AmethystDecreeConstants.DOT_INTERVAL_TICKS;
         if (activeTicks % interval != 0) {
             return;
         }
         int tickIndex = activeTicks / interval;
-        if (tickIndex > AmethystDecreeConfig.DOT_TICK_COUNT.get()) {
+        if (tickIndex > AmethystDecreeConstants.DOT_TICK_COUNT) {
             return;
         }
         if (!(this.level() instanceof ServerLevel serverLevel)) {
@@ -169,7 +172,7 @@ public class AmethystDecreeAoe extends AoeEntity {
             if (!(resolved instanceof LivingEntity target) || !target.isAlive()) {
                 continue;
             }
-            DamageSources.applyDamage(target, AmethystDecreeConfig.DOT_DAMAGE_PER_TICK.get().floatValue(), getDamageSource(owner));
+            DamageSources.applyDamage(target, (float) AmethystDecreeConstants.DOT_DAMAGE_PER_TICK, getDamageSource(owner));
             spawnHitVfx(target);
         }
     }
@@ -177,16 +180,16 @@ public class AmethystDecreeAoe extends AoeEntity {
     private void applyRootAndStun(LivingEntity target) {
         MobEffect stop = ForgeRegistries.MOB_EFFECTS.getValue(EFN_STOP_ID);
         if (stop != null) {
-            target.addEffect(new MobEffectInstance(stop, AmethystDecreeConfig.ROOT_DURATION_TICKS.get(), 0, false, true, true));
+            target.addEffect(new MobEffectInstance(stop, AmethystDecreeConstants.ROOT_DURATION_TICKS, 0, false, true, true));
         }
         MobEffect stun = ForgeRegistries.MOB_EFFECTS.getValue(CATACLYSM_STUN_ID);
         if (stun != null) {
-            target.addEffect(new MobEffectInstance(stun, AmethystDecreeConfig.STUN_DURATION_TICKS.get(), 0, false, true, true));
+            target.addEffect(new MobEffectInstance(stun, AmethystDecreeConstants.STUN_DURATION_TICKS, 0, false, true, true));
         }
     }
 
     private void applyDebuffs(LivingEntity target) {
-        int duration = AmethystDecreeConfig.DEBUFF_DURATION_TICKS.get();
+        int duration = AmethystDecreeConstants.DEBUFF_DURATION_TICKS;
         target.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, duration, 1, false, true, true));
         target.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, duration, 0, false, true, true));
         target.addEffect(new MobEffectInstance(MobEffects.DIG_SLOWDOWN, duration, 1, false, true, true));
@@ -196,27 +199,12 @@ public class AmethystDecreeAoe extends AoeEntity {
         return ((AbstractSpell) BHXSpellRegistry.AMETHYST_DECREE.get()).getDamageSource(this, owner);
     }
 
-    // --- Phase 1 placeholder VFX — vanilla particles only, swap wholesale in Phase 2. ---
-
-    /** Vanilla purple particles at the target's feet on hit. */
+    /** Falling purple mote particles at the target's feet on hit — kept from Phase 1 per the
+     *  Phase 2 spec (only the cast-ring and encasement placeholders were replaced). */
     private void spawnHitVfx(LivingEntity target) {
         if (!(this.level() instanceof ServerLevel serverLevel)) {
             return;
         }
         serverLevel.sendParticles(ParticleTypes.WITCH, target.getX(), target.getY() + 0.1, target.getZ(), 12, 0.3, 0.05, 0.3, 0.01);
-    }
-
-    /** A simple ring of vanilla purple particles at the cast radius, once, on burst. */
-    private void spawnCastRingVfx() {
-        if (!(this.level() instanceof ServerLevel serverLevel)) {
-            return;
-        }
-        double radius = AmethystDecreeConfig.RADIUS.get();
-        for (int i = 0; i < RING_VFX_POINTS; i++) {
-            double angle = (Math.PI * 2 * i) / RING_VFX_POINTS;
-            double x = this.getX() + Math.cos(angle) * radius;
-            double z = this.getZ() + Math.sin(angle) * radius;
-            serverLevel.sendParticles(ParticleTypes.WITCH, x, this.getY() + 0.1, z, 1, 0.0, 0.0, 0.0, 0.0);
-        }
     }
 }

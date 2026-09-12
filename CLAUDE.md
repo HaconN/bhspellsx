@@ -291,6 +291,21 @@ effects for scene purposes; breaking that is worse than the cosmetic message abo
 
 ---
 
+## Forge config files override code defaults on every launch — check the deployed toml first
+
+Once `ForgeConfigSpec` generates a `config/bhspellsx-common.toml` on a given instance, that file
+wins over the code default from then on, every launch — changing a default in `AmethystDecreeConfig`
+has **no effect** on an instance that already has the toml. Confirmed the hard way: `RADIUS`'s
+default was changed 6.75 -> 10.0 in code, built and deployed correctly, and the spell still used
+6.75 in-game because `D:\...\config\bhspellsx-common.toml` already had `radius = 6.75` baked in
+from earlier testing. Cost a full test cycle before the toml was checked.
+
+**When a config-backed value doesn't take effect in game, check the deployed toml before
+suspecting the code.** Fix is to edit the value directly in the deployed file (or delete it to
+regenerate from the new defaults, losing any other hand-tuned values in that file in the process).
+
+---
+
 ## Every `BHXEntityRegistry` entity type MUST have a client renderer registered
 
 Registering an `EntityType` in `BHXEntityRegistry` is not enough on its own — it also needs a

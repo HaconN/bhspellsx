@@ -6,9 +6,13 @@ import net.minecraftforge.client.event.EntityRenderersEvent;
 import net.minecraftforge.client.event.RegisterParticleProvidersEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import net.offkung.bhspellsx.client.particle.AmethystShardParticle;
 import net.offkung.bhspellsx.client.particle.EmbraceLeafParticle;
 import net.offkung.bhspellsx.client.particle.EmbraceMoteParticle;
+import net.offkung.bhspellsx.client.renderer.AmethystDecreeCasterRingRenderer;
+import net.offkung.bhspellsx.client.renderer.AmethystDecreeTargetCrystalRenderer;
 import net.offkung.bhspellsx.client.renderer.EmbracingBosomRingRenderer;
+import net.offkung.bhspellsx.client.renderer.crystal.CrystalUnitModel;
 import net.offkung.bhspellsx.registry.BHXEntityRegistry;
 import net.offkung.bhspellsx.registry.BHXParticleRegistry;
 
@@ -27,11 +31,22 @@ public class BHSpellsXClient {
         // *something* — Forge crashes on the client the moment an instance of an unrendered
         // custom EntityType spawns without one.
         event.registerEntityRenderer(BHXEntityRegistry.AMETHYST_DECREE_AOE.get(), NoopRenderer::new);
+        // Phase 2 VFX — both draw their own crystal instances via CrystalUnitModel, see those
+        // renderer classes.
+        event.registerEntityRenderer(BHXEntityRegistry.AMETHYST_DECREE_CASTER_RING.get(), AmethystDecreeCasterRingRenderer::new);
+        event.registerEntityRenderer(BHXEntityRegistry.AMETHYST_DECREE_TARGET_CRYSTAL.get(), AmethystDecreeTargetCrystalRenderer::new);
+    }
+
+    @SubscribeEvent
+    public static void onRegisterLayers(EntityRenderersEvent.RegisterLayerDefinitions event) {
+        event.registerLayerDefinition(CrystalUnitModel.SMALL_LAYER, CrystalUnitModel::createSmallLayer);
+        event.registerLayerDefinition(CrystalUnitModel.LARGE_LAYER, CrystalUnitModel::createLargeLayer);
     }
 
     @SubscribeEvent
     public static void onRegisterParticleProviders(RegisterParticleProvidersEvent event) {
         event.registerSpriteSet(BHXParticleRegistry.EMBRACE_LEAF.get(), EmbraceLeafParticle.Provider::new);
         event.registerSpriteSet(BHXParticleRegistry.EMBRACE_MOTE.get(), EmbraceMoteParticle.Provider::new);
+        event.registerSpriteSet(BHXParticleRegistry.AMETHYST_SHARD.get(), AmethystShardParticle.Provider::new);
     }
 }

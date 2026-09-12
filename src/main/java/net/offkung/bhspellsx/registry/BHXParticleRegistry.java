@@ -6,6 +6,7 @@ import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
+import net.offkung.bhspellsx.client.particle.AmethystShardParticleOption;
 import net.offkung.bhspellsx.client.particle.EmbraceLeafParticleOption;
 import net.offkung.bhspellsx.client.particle.EmbraceMoteParticleOption;
 
@@ -26,6 +27,14 @@ public class BHXParticleRegistry {
                 @Override
                 public Codec<EmbraceMoteParticleOption> codec() {
                     return EmbraceMoteParticleOption.CODEC;
+                }
+            });
+
+    public static final RegistryObject<ParticleType<AmethystShardParticleOption>> AMETHYST_SHARD =
+            PARTICLE_TYPES.register("amethyst_shard", () -> new ParticleType<>(false, AmethystShardParticleOption.DESERIALIZER) {
+                @Override
+                public Codec<AmethystShardParticleOption> codec() {
+                    return AmethystShardParticleOption.CODEC;
                 }
             });
 

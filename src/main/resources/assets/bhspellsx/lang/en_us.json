@@ -1,5 +1,8 @@
 {
   "spell.bhspellsx.embracing_bosom": "Embracing Bosom",
   "spell.bhspellsx.embracing_bosom.guide": "Channel to plant a warding circle at your feet. Players standing in it are healed periodically and take reduced damage while blessed; harmful effects applied to them expire faster.",
-  "effect.bhspellsx.embracing_bosom": "Embracing Bosom"
+  "effect.bhspellsx.embracing_bosom": "Embracing Bosom",
+
+  "spell.bhspellsx.amethyst_decree": "Amethyst Decree",
+  "spell.bhspellsx.amethyst_decree.guide": "Channel to erupt a burst of amethyst around you. Enemies caught in the blast take heavy damage, are rooted and stunned, and are weakened while lingering crystal damage wears them down."
 }

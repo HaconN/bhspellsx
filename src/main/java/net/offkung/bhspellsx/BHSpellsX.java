@@ -4,13 +4,10 @@ import com.mojang.logging.LogUtils;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.eventbus.api.IEventBus;
-import net.minecraftforge.fml.ModLoadingContext;
-import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.registries.ForgeRegistries;
-import net.offkung.bhspellsx.config.AmethystDecreeConfig;
 import net.offkung.bhspellsx.entity.spells.amethyst_decree.AmethystDecreeAoe;
 import net.offkung.bhspellsx.event.EmbracingBosomEvents;
 import net.offkung.bhspellsx.registry.BHXEntityRegistry;
@@ -40,7 +37,6 @@ public class BHSpellsX {
         // here rather than via @Mod.EventBusSubscriber, matching bhspells' own house style
         // (see BypassDamageEvent/SwordDashManager in the real bhspells mod).
         MinecraftForge.EVENT_BUS.register(EmbracingBosomEvents.class);
-        ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, AmethystDecreeConfig.SPEC);
         modEventBus.addListener(BHSpellsX::checkAmethystDecreeMobEffects);
     }
 
