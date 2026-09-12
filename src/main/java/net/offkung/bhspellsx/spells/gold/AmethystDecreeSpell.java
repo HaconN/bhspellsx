@@ -95,14 +95,22 @@ public class AmethystDecreeSpell extends AbstractSpell {
         return this.getCastTime(spellLevel);
     }
 
+    /** Copied exactly from irons_spellbooks' own FrostwaveSpell (also CastType.LONG, castTime
+     *  20 — identical to ours): CHARGE_RAISED_HAND held for the whole cast (playOnce=false ->
+     *  HOLD_ON_LAST_FRAME), then TOUCH_GROUND_ANIMATION at cast completion. STOMP was tried
+     *  first (matching bhspells' own FeetStompSpell) but STOMP has its own leg-raise windup
+     *  baked into the animation itself, so pairing it after an already-held raised-hand pose
+     *  produced a visible second windup before the hit landed. TOUCH_GROUND_ANIMATION has no
+     *  such windup — Frostwave's actual impact visual comes from particles spawned in its
+     *  onCast() (synced to cast completion), not from the finish animation itself. */
     @Override
     public AnimationHolder getCastStartAnimation() {
-        return SpellAnimations.STOMP;
+        return SpellAnimations.CHARGE_RAISED_HAND;
     }
 
     @Override
     public AnimationHolder getCastFinishAnimation() {
-        return AnimationHolder.pass();
+        return SpellAnimations.TOUCH_GROUND_ANIMATION;
     }
 
     /** Same fix as StoneCrumbleSpell.getDamageSource() — the burst and the first DoT tick can
