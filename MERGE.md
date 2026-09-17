@@ -8,12 +8,13 @@ Note: as of the JPMS split-package fix, **all** source in this repo lives under
 procedure below is what performs the `bhspellsx` → `bhspells` rename; it does not exist
 anywhere else in this repo.
 
-**This doc now covers two independent spells: `embracing_bosom` and `amethyst_decree`.**
-They don't share any portable files, so each has its own "Portable content" list and its
-own numbered procedure below (§A and §B) — only the namespace find-replace mechanics and
-the final `mods.toml` check are common to both. Read the two ⚠️ warning sections below
-before starting either one; they're not optional context, they're the two ways this merge
-goes wrong silently.
+**This doc covers three independent spells: `embracing_bosom`, `amethyst_decree`, and
+`crystal_hydro_dome`.** They don't share any portable files, so each has its own "Portable
+content" list and its own numbered procedure below (§A, §B, §C) — only the namespace
+find-replace mechanics and the final `mods.toml` check are common to all. Read the two ⚠️
+warning sections below before starting any of them; they're not optional context, they're
+the two ways this merge goes wrong silently. The RenderType warning applies to
+`crystal_hydro_dome`'s renderer too (see §C).
 
 ---
 
@@ -61,6 +62,14 @@ root-caused.
 
 Does not apply to `amethyst_decree` — its renderers use a plain vanilla `EntityModel`, no
 custom `RenderType` at all (see §B below).
+
+**Does apply to `crystal_hydro_dome`:** `CrystalHydroDomeRenderer.buildDomeRenderType()` is a
+deliberate copy of the same composite state (same shader, `SRC_ALPHA/ONE` additive blend, no
+cull, no depth write). Its lotus pass uses vanilla `RenderType.entityTranslucentEmissive(...)`
+— same shader, normal alpha blend. Don't swap either for a "simpler" RenderType. The
+non-emissive `getRendertypeEntityTranslucentShader()` was tried for the lotus and rendered
+the petals solid black: its fragment shader always multiplies by the lightmap, and the
+hand-built state had the lightmap disabled. See the comment above `LOTUS_RENDER_TYPE`.
 
 ---
 
@@ -165,6 +174,27 @@ above.** Everything else in these classes really is throwaway.
 - `assets/bhspellsx/textures/entity/amethyst_crystal.png`
 - `assets/bhspellsx/textures/particle/amethyst_shard.png`
 - `assets/bhspellsx/particles/amethyst_shard.json`
+
+### crystal_hydro_dome
+
+- `spells/water/CrystalHydroDomeSpell.java` — CONTINUOUS 120-tick cast; first pulse spawns the
+  dome + open cleanse/heal; `onServerCastComplete` drives natural end vs early break.
+- `entity/spells/crystal_hydro_dome/CrystalHydroDomeAoe.java` — all gameplay (damage redirect,
+  dome HP, Counter, projectile layer, root, action-bar HP, end heal/knockback), plus the synced
+  data the renderer reads (counter bolts, end state) and the end sounds.
+- `entity/spells/crystal_hydro_dome/CrystalHydroDomeConstants.java` — every gameplay number,
+  hardcoded on purpose (no config).
+- `event/CrystalHydroDomeEvents.java` — `LivingAttackEvent`/`LivingDamageEvent` redirect and
+  login tag cleanup; no annotation, registered manually.
+- `client/renderer/CrystalHydroDomeRenderer.java` — **read the RenderType warning above.** All
+  VFX: shell, water streaks, lotus, wind, drifting petals, ground sigil, shell lightning, counter bolts,
+  natural-end wave, broken-end shatter. Hand-built meshes, no model/texture of its own.
+- `client/renderer/CrystalHydroDomeVisuals.java` — every visual tuning number.
+- `assets/bhspellsx/lang/en_us.json` — four `crystal_hydro_dome` keys (see §C step 3).
+
+No textures, particle types, sounds, or model layers of its own — the renderer binds
+`forge:textures/white.png` and colors by vertex; sounds are vanilla `SoundEvents` plus
+irons_spellbooks' `SoundRegistry`.
 
 ---
 
@@ -480,7 +510,170 @@ above.** Everything else in these classes really is throwaway.
 
 ---
 
-## mods.toml (applies to both spells)
+## §C. crystal_hydro_dome merge procedure
+
+Melee swung at the dome's bare surface (no entity behind the swing) is intentionally not
+detected or countered — only hits on entities inside the dome, incoming projectiles, and AoE
+damage are redirected/countered; this was investigated and cancelled (see
+`docs/recon/crystal_hydro_dome_phase2_part1_melee.md`), not an oversight to fix during merge.
+
+1. **Find-replace the package/namespace** — across every file listed under crystal_hydro_dome
+   in the "Portable content" section above, same two replacements as §A/§B step 1:
+   - `net.offkung.bhspellsx` → `net.offkung.bhspells`
+   - the string literal `"bhspellsx"` → `"bhspells"`
+
+   `CrystalHydroDomeSpell.java`:
+
+   ```java
+   // before
+   package net.offkung.bhspellsx.spells.water;
+   ...
+   private static final ResourceLocation SPELL_ID =
+           ResourceLocation.fromNamespaceAndPath("bhspellsx", "crystal_hydro_dome");
+
+   // after
+   package net.offkung.bhspells.spells.water;
+   ...
+   private static final ResourceLocation SPELL_ID =
+           ResourceLocation.fromNamespaceAndPath("bhspells", "crystal_hydro_dome");
+   ```
+
+   Do **not** touch `CrystalHydroDomeAoe.EFN_HORIZONTALSTOP_ID`/`EFN_VERTICALSTOP_ID`
+   (`efn:horizontalstop`/`efn:verticalstop`) or either tag constant (`DOME_TAG` =
+   `pers_liming_dome`, `REFLECTED_TAG`) — they aren't registry namespaces. `DOME_TAG` in
+   particular is read by the liming datapack's cooldown power and must stay exactly
+   `pers_liming_dome`. `REFLECTED_TAG`'s value (`bhspellsx_crystal_hydro_dome_reflected`) does
+   contain the text `bhspellsx`, so the post-merge grep will hit it; it's only a runtime
+   entity tag set and read inside `CrystalHydroDomeAoe`, so renaming it to `bhspells_...` or
+   leaving it is equally safe.
+
+   **Why `horizontalstop`+`verticalstop` and not `efn:stop`** (same effect amethyst_decree
+   still uses for its root): in-game testing found `efn:stop` locks ALL input, not just
+   movement — decompiling the deployed EFN jar found this is enforced by 4 client-side Mixins
+   (`MixinKeyboardHandler`, `MixinMouseHandler`, `MixinKeyMapping`) that all gate on the mere
+   *presence* of `efn:stop` specifically, blocking every keypress, click, and mouse-look —
+   including opening the inventory, F3, and the pause menu, not just movement. None of those
+   Mixins reference `efn:horizontalstop`/`efn:verticalstop` at all, so applying that pair
+   together (one freezes X/Z, the other freezes Y) gets the same full position-freeze while
+   blocking no input themselves — the caster can still look and attack. Separately, while the
+   dome's cast is active the player can't open chat or inventory (observed in-game; the dome
+   stays up). Opening a container or pressing another skill cancels the cast and breaks the
+   dome. `amethyst_decree`'s own use of `efn:stop` was deliberately left untouched — that's a
+   separate, still-pending decision, not an oversight.
+
+   `CrystalHydroDomeAoe.java`: package decl only. Also imports `BHXEntityRegistry` (for its
+   `(Level)` convenience constructor) and `BHXSpellRegistry` (for `getDamageSource()`'s spell
+   lookup) — both repointed in step C5.
+
+   `CrystalHydroDomeRenderer.java`, `CrystalHydroDomeVisuals.java`: package decl only (plus the
+   renderer's static import of `CrystalHydroDomeVisuals.*`). The RenderType names inside
+   (`"bhspellsx_crystal_hydro_dome"`, `"bhspellsx_dome_additive_alpha"`) are debug labels only;
+   rename or keep, either works.
+
+   `CrystalHydroDomeConstants.java`, `CrystalHydroDomeEvents.java`: package decl only.
+   `CrystalHydroDomeEvents.java` has no `@Mod.EventBusSubscriber` annotation and carries no
+   modid; its `@SubscribeEvent` methods are static and the class is registered manually from
+   the main mod class constructor (`MinecraftForge.EVENT_BUS.register(CrystalHydroDomeEvents.class)`,
+   see step 5) — no annotation to update.
+
+2. **Move the renamed files** into bhspells' source tree, mirroring the subpackage paths
+   under `net/offkung/bhspells/` (e.g. `net/offkung/bhspells/spells/water/CrystalHydroDomeSpell.java`,
+   `net/offkung/bhspells/entity/spells/crystal_hydro_dome/CrystalHydroDomeAoe.java`).
+
+3. **Assets** — none besides lang. All VFX are hand-built meshes in `CrystalHydroDomeRenderer`
+   (colored by vertex over `forge:textures/white.png`) plus native `minecraft:glow` spawned
+   client-side from `CrystalHydroDomeAoe.tick()`. No texture, particle type, sound file, or model
+   layer to move. (The old Phase 1 `spawnBoundaryVfx()` splash particles no longer exist.)
+
+   **Lang keys**: `assets/bhspellsx/lang/en_us.json` has four entries for this spell —
+   `spell.bhspellsx.crystal_hydro_dome`, `spell.bhspellsx.crystal_hydro_dome.guide`, and the two
+   action-bar HP readout keys `ui.bhspellsx.crystal_hydro_dome_hp_label` (read by
+   `CrystalHydroDomeAoe.buildHpReadoutComponent()`) and `ui.bhspellsx.crystal_hydro_dome_hp_value`
+   (the `%s/%s` hp/max format, args supplied in code — colors are applied via `Style` in
+   `buildHpReadoutComponent()`, not baked into either lang value). All four need the same
+   `bhspellsx` → `bhspells` key-prefix rename as step 1's Java changes, merged into bhspells'
+   own `en_us.json` rather than moved as a separate file.
+
+4. **School reference — nothing to swap, unlike §B step 4.** `CrystalHydroDomeSpell` already
+   references `com.gametechbc.traveloptics.api.init.TravelopticsSchools.AQUA_RESOURCE` as a real
+   compile-time class field, not a `GOLD_SCHOOL_RESOURCE`-style `ResourceLocation` string
+   placeholder — traveloptics is already a hard runtime dependency of `bhspellsx` (see
+   `bhspellsx/CLAUDE.md`'s Dependency jars section), so there was never a reason to defer this
+   reference to merge time. The import survives the move unchanged.
+
+5. **Registry wiring**:
+
+   ```java
+   // net/offkung/bhspells/registry/BHSpellRegistry.java:
+   public static final RegistryObject<AbstractSpell> CRYSTAL_HYDRO_DOME =
+           registerSpell(new CrystalHydroDomeSpell());
+
+   // net/offkung/bhspells/registry/EntityRegistry.java:
+   public static final RegistryObject<EntityType<CrystalHydroDomeAoe>> CRYSTAL_HYDRO_DOME_AOE =
+           ENTITIES.register("crystal_hydro_dome_aoe", () -> EntityType.Builder
+                   .<CrystalHydroDomeAoe>of(CrystalHydroDomeAoe::new, MobCategory.MISC)
+                   .sized(12.0f, 6.0f).clientTrackingRange(64)
+                   .build(ResourceLocation.fromNamespaceAndPath("bhspells", "crystal_hydro_dome_aoe").toString()));
+   ```
+
+   Repoint `CrystalHydroDomeAoe.java`'s `BHXEntityRegistry.CRYSTAL_HYDRO_DOME_AOE` →
+   `EntityRegistry.CRYSTAL_HYDRO_DOME_AOE` and `BHXSpellRegistry.CRYSTAL_HYDRO_DOME` →
+   `BHSpellRegistry.CRYSTAL_HYDRO_DOME`.
+
+   Register the renderer in bhspells' client entrypoint's `RegisterRenderers` handler. It is
+   the real VFX renderer now, **not** `NoopRenderer` (Phase 1 used Noop; that's stale):
+
+   ```java
+   event.registerEntityRenderer(EntityRegistry.CRYSTAL_HYDRO_DOME_AOE.get(), CrystalHydroDomeRenderer::new);
+   ```
+
+   Register `CrystalHydroDomeEvents` on the FORGE bus from bhspells' main mod class
+   constructor (`MinecraftForge.EVENT_BUS.register(CrystalHydroDomeEvents.class)`), same as
+   `BHSpellsX` does today.
+
+6. **No `RegisterLayerDefinitions` or particle-provider step needed** — unlike §B step 6,
+   crystal_hydro_dome has no `EntityModel`/`ModelLayerLocation` and no custom particle type.
+
+   Things that look removable but aren't, all in `CrystalHydroDomeAoe`:
+   - `defineSynchedData()`/`onSyncedDataUpdated()` and the `DATA_COUNTER_*`/`DATA_END_STATE`
+     accessors — this is how the client learns about Counters (bolt target, 8-slot ring buffer)
+     and which ending to play. No custom packet channel exists; don't add one.
+   - The `ended` → `lingerTicks` branch in `tick()` — after `finish()` the dome is already out of
+     `ACTIVE_DOMES` (no more gameplay), but the entity stays loaded `END_LINGER_TICKS` (30) so
+     clients can play the end/shatter animation. Discarding immediately makes the dome just
+     vanish and hides the last Counter bolt.
+   - `SoundRegistry` import — irons_spellbooks' `HOLY_CAST`/`ICE_BLOCK_IMPACT`. bhspells already
+     depends on irons_spellbooks, nothing to add.
+   - `CrystalHydroDomeRenderer.shouldRender()` always `true` — the entity's bounding box is far
+     smaller than the dome, so default frustum culling hides it.
+
+7. **Re-home the mob effect check.** `BHSpellsX.checkAmethystDecreeMobEffects` (despite its
+   name — see the ⚠️ warning section near the top of this doc) already covers **both**
+   amethyst_decree's `efn:stop`/`cataclysm:stun` and crystal_hydro_dome's
+   `efn:horizontalstop`/`efn:verticalstop` in one method. Moving the whole method over in one
+   piece (as the warning section already instructs) carries crystal_hydro_dome's check along
+   automatically — no separate action needed here, just don't split the method up or drop the
+   `CrystalHydroDomeAoe.EFN_HORIZONTALSTOP_ID`/`EFN_VERTICALSTOP_ID` block while moving it.
+
+8. **Update the liming datapack's cast command — outside this repo, easy to forget.**
+   `Origins/liming/data/pers/powers/liming/active_i/skill1.json` runs
+   `cast @s bhspellsx:crystal_hydro_dome`. After the merge the spell id is
+   `bhspells:crystal_hydro_dome`; change that one command or the button silently does nothing
+   (mana is still spent by the Apoli side). Origin id stays `pers:liming`. The local test copy
+   of `origin_layers/origin.json` is not part of the delivery.
+
+9. **Not a merge step — flagging so it isn't mistaken for one:** during Phase 1 testing, the
+   Modrinth App profile on the local test machine started rejecting any `bhspellsx-*.jar`
+   copied directly into its `mods\` folder ("needs repair or re-import"), because that launcher
+   only trusts mod files added through its own "Upload files" UI (see
+   `bhspellsx/CLAUDE.md`'s Testing loop section). This is purely a local dev-machine deployment
+   quirk of one specific launcher on one specific test setup — it has nothing to do with
+   bhspells itself or the merge, and doesn't need any accommodation in the merged mod, the
+   `mods.toml`, or the build. Ignore it here.
+
+---
+
+## mods.toml (applies to all three spells)
 
 No action needed on the bhspells side; bhspells already declares its own
 `irons_spellbooks`/`irons_lib`/`traveloptics` dependencies (it already calls traveloptics
@@ -546,7 +739,57 @@ present, confirm:
   warning section) actually logs its error, and that the spell still deals damage/debuffs/
   DoT with just that one CC component missing rather than crashing.
 
-Once both spells are confirmed, this `bhspellsx` repo can be archived or deleted — it has
-no further purpose after a successful merge. (If more phases are planned, keep the repo
+### crystal_hydro_dome
+
+Verified in-game (gameplay through Phase 1, VFX through Phase 2D, 2026-09-17) — this is the
+confirmed-working behavior to match after merge, not a placeholder spec. Full agreed spec
+and the reasons behind it: `docs/crystal_hydro_dome_decisions.md`.
+- **Cast:** `CastType.CONTINUOUS`, 120-tick (6s) cast time — real Iron's casting animation +
+  cast bar for the whole duration, not an instant no-bar cast. `onCast()` fires every 10
+  ticks per Iron's own CONTINUOUS pulse cadence (including the terminal pulse), but the dome
+  and its open burst spawn only on the first pulse
+  (`playerMagicData.getCastDurationRemaining() == playerMagicData.getCastDuration()`) —
+  casting the skill never produces a second, cast-less/mana-less dome.
+- **Natural end:** driven by cast completion — `onServerCastComplete(cancelled=false)` calls
+  `CrystalHydroDomeAoe.naturalEndFor()` (end heal + knockback). The dome's own tick-based
+  check is a fallback only, at `DURATION_TICKS + FALLBACK_END_GRACE_TICKS` (tick 125), in case
+  cast state is somehow lost — it can only end an already-alive dome, never spawn one.
+- **Early break:** `onServerCastComplete(cancelled=true)` — opening a container, casting
+  another skill, death, logout, dimension change — breaks the dome immediately (no end heal,
+  no knockback) via `CrystalHydroDomeAoe.endActiveDomeFor()`, and the cast bar disappears
+  right away rather than lingering.
+- **Root:** `efn:horizontalstop` + `efn:verticalstop` reapplied every tick (NOT `efn:stop` —
+  see this file's earlier note on why: `efn:stop`'s client mixins block all input, not just
+  movement). Caster can look and attack while the dome is up; walking and jumping are locked.
+  Chat/inventory can't be opened during the cast (observed in testing, accepted) — opening a
+  container cancels the cast and breaks the dome.
+- **Size:** hemisphere radius/height 10 blocks; knockback ring 10–13 blocks out, -2..+11
+  vertical.
+- **HUD:** action-bar HP readout (green Thai label + red heart + white/red hp/max, switching
+  to red under 30%), caster-only, coalesced to at most one send per tick, clearing
+  immediately on any dome end.
+- **VFX while alive** (check with and without an Oculus/Iris shaderpack):
+  - Translucent cyan shell with brighter edges and a bright band at ground level.
+  - Water pattern on the shell: 24 soft wavy streaks flowing slowly around the dome and
+    fading in/out, plus short bright flecks.
+  - Three-layer lotus: pink outer/middle petals, gold inner petals, two gold wind ribbons in
+    the center, native glow sparks.
+  - 24 small pink petals drifting up through the whole dome; ground ring + arcs with two
+    gold pulses moving inward.
+  - Thin, fast yellow lightning flickering over the shell surface.
+- **Counter bolt:** a yellow bolt from a point on the dome surface near the attacker (tilted
+  up to 20° per bolt) all the way to the attacker, at any distance. An AoE that Counters
+  several players in one tick shows one bolt each (up to 8 per tick).
+- **Natural end:** shell swells to ~13 blocks and fades, water rings sweep out to ~13.5
+  (the knockback zone), lotus spreads to ~10 blocks and fades, drifting petals fly outward;
+  holy + amethyst chime sound.
+- **Early break:** shell cracks into irregular shards that hold for a moment, then fly out,
+  fall and fade; lotus folds shut and sinks into the ground; everything else fades; layered
+  glass/ice crash with a short tinkling tail.
+- **After an end:** the entity lingers ~1.5s for the animation, but damage redirect, Counter
+  and projectile blocking stop at the moment of the end, and cooldown starts then too.
+
+Once all three spells are confirmed, this `bhspellsx` repo can be archived or deleted — it
+has no further purpose after a successful merge. (If more phases are planned, keep the repo
 and start the next phase's content in a fresh subpackage under `net/offkung/bhspellsx/...`
 instead.)

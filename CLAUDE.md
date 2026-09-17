@@ -92,12 +92,38 @@ Java package declarations only.
 This modpack cannot run via `runClient`/`runServer` — it's 70+ interdependent mods,
 several running through Sinytra Connector, way outside what a ForgeGradle userdev
 environment can reproduce. `build.gradle` deliberately has **no `runs {}` block**. The
-actual test loop is:
+actual test loop is `./gradlew build`, then deploy the jar per the two targets below,
+then launch and test in-game.
 
-1. `./gradlew build`
-2. Copy `build/libs/bhspellsx-<version>.jar` into the real modpack's mods folder
-   (`D:\Game\Modrinth App\profiles\Minguye Origins Work 1.0.1\mods\`)
-3. Launch that profile for real and test in-game.
+**Two deploy targets, two different rules for the mod jar** (confirmed 2026-09-16 — the
+Modrinth App rule below isn't optional/a suggestion, it's a hard requirement or the app
+itself flags the install as broken):
+
+- **Modrinth App profile** (`D:\Game\Modrinth App\profiles\Minguye Origins Work 1.0.1\mods\`)
+  — **never copy the jar in directly.** The Modrinth App only trusts mod files it added
+  itself through its own UI; a jar placed into `mods\` by any other means (script, manual
+  copy, another launcher) gets flagged as "needs repair or re-import" and the profile
+  refuses to treat it as properly installed. Build the jar, report its path
+  (`build/libs/bhspellsx-<version>.jar`), and let a human add it via the app's own
+  **"Upload files"** feature — don't try to work around this by copying it in some other
+  way (renaming, re-zipping, etc.). Datapack deploys to this profile's
+  `saves\...\datapacks\` folder are **unaffected by this rule** — those are plain file
+  copies handled entirely outside Modrinth's own mod-management UI, so keep deploying
+  datapacks there exactly as before.
+- **PrismLauncher instance**
+  (`C:\Users\User\AppData\Roaming\PrismLauncher\instances\Minguye Origins Work 1.0.1 1.0.0\minecraft\mods\`)
+  — copying the jar directly into `mods\` is fine here, no restriction. This instance is
+  mods-jar-only (no datapack of its own) — it's a second client that joins the LAN world
+  hosted from the Modrinth profile.
+
+  **Don't block a deploy just because `javaw`/`prismlauncher` processes are running** — the
+  user runs multiple, unrelated PrismLauncher instances/games on this machine, so a running
+  `javaw.exe`/`prismlauncher.exe` is not a reliable signal that *this* instance is open.
+  Attempt the delete-then-copy directly; if the target jar is actually locked (in use by a
+  running copy of this instance), the delete/copy will fail with a file-in-use error —
+  stop and report that to the user rather than retrying or working around it. Confirmed
+  2026-09-16: a running `javaw`/`prismlauncher` from a different instance did not lock this
+  instance's `mods\` folder at all.
 
 Never suggest `runClient`/`runServer` as a way to verify a change here — it will not work
 and is not the intended workflow.

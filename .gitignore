@@ -29,3 +29,8 @@ forge*changelog.txt
 # dev use. Never commit these; anyone rebuilding this repo re-copies them from their own
 # modpack install (see README.md).
 libs/*.jar
+
+# logs and editor
+*.log
+logs/
+.vscode/
