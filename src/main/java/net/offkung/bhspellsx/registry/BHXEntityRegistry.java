@@ -10,6 +10,7 @@ import net.minecraftforge.registries.RegistryObject;
 import net.offkung.bhspellsx.entity.spells.amethyst_decree.AmethystDecreeAoe;
 import net.offkung.bhspellsx.entity.spells.amethyst_decree.AmethystDecreeCasterRingEntity;
 import net.offkung.bhspellsx.entity.spells.amethyst_decree.AmethystDecreeTargetCrystalEntity;
+import net.offkung.bhspellsx.entity.spells.crystal_hydro_dome.CrystalHydroDomeAoe;
 import net.offkung.bhspellsx.entity.spells.embracing_bosom.EmbracingBosomAoe;
 
 public class BHXEntityRegistry {
@@ -49,6 +50,17 @@ public class BHXEntityRegistry {
                     .sized(2.0f, 3.0f)
                     .clientTrackingRange(64)
                     .build(ResourceLocation.fromNamespaceAndPath("bhspellsx", "amethyst_decree_target_crystal").toString()));
+
+    // Registry baseline only (sized back when the dome radius was 5). AoeEntity.getDimensions()
+    // overrides this from getRadius() at runtime (height hardcoded 1.2), and nothing in the dome
+    // relies on the bounding box: gameplay uses CrystalHydroDomeAoe.isInside()/searchBox() and
+    // the renderer's shouldRender() always returns true.
+    public static final RegistryObject<EntityType<CrystalHydroDomeAoe>> CRYSTAL_HYDRO_DOME_AOE =
+            ENTITY_TYPES.register("crystal_hydro_dome_aoe", () -> EntityType.Builder
+                    .<CrystalHydroDomeAoe>of(CrystalHydroDomeAoe::new, MobCategory.MISC)
+                    .sized(12.0f, 6.0f)
+                    .clientTrackingRange(64)
+                    .build(ResourceLocation.fromNamespaceAndPath("bhspellsx", "crystal_hydro_dome_aoe").toString()));
 
     public static void register(IEventBus eventBus) {
         ENTITY_TYPES.register(eventBus);

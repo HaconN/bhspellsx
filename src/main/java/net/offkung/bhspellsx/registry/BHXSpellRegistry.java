@@ -7,6 +7,7 @@ import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.RegistryObject;
 import net.offkung.bhspellsx.spells.gold.AmethystDecreeSpell;
 import net.offkung.bhspellsx.spells.ground.EmbracingBosomSpell;
+import net.offkung.bhspellsx.spells.water.CrystalHydroDomeSpell;
 
 /**
  * Registers into irons_spellbooks' own SpellRegistry (SPELL_REGISTRY_KEY), same pattern
@@ -22,6 +23,9 @@ public class BHXSpellRegistry {
 
     public static final RegistryObject<AbstractSpell> AMETHYST_DECREE =
             registerSpell(new AmethystDecreeSpell());
+
+    public static final RegistryObject<AbstractSpell> CRYSTAL_HYDRO_DOME =
+            registerSpell(new CrystalHydroDomeSpell());
 
     private static RegistryObject<AbstractSpell> registerSpell(AbstractSpell spell) {
         return SPELLS.register(spell.getSpellName(), () -> spell);

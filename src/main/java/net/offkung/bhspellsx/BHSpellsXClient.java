@@ -11,6 +11,7 @@ import net.offkung.bhspellsx.client.particle.EmbraceLeafParticle;
 import net.offkung.bhspellsx.client.particle.EmbraceMoteParticle;
 import net.offkung.bhspellsx.client.renderer.AmethystDecreeCasterRingRenderer;
 import net.offkung.bhspellsx.client.renderer.AmethystDecreeTargetCrystalRenderer;
+import net.offkung.bhspellsx.client.renderer.CrystalHydroDomeRenderer;
 import net.offkung.bhspellsx.client.renderer.EmbracingBosomRingRenderer;
 import net.offkung.bhspellsx.client.renderer.crystal.CrystalUnitModel;
 import net.offkung.bhspellsx.registry.BHXEntityRegistry;
@@ -31,6 +32,8 @@ public class BHSpellsXClient {
         // *something* — Forge crashes on the client the moment an instance of an unrendered
         // custom EntityType spawns without one.
         event.registerEntityRenderer(BHXEntityRegistry.AMETHYST_DECREE_AOE.get(), NoopRenderer::new);
+        // All crystal_hydro_dome VFX (shell, lotus, lightning, endings) — see CrystalHydroDomeRenderer.
+        event.registerEntityRenderer(BHXEntityRegistry.CRYSTAL_HYDRO_DOME_AOE.get(), CrystalHydroDomeRenderer::new);
         // Phase 2 VFX — both draw their own crystal instances via CrystalUnitModel, see those
         // renderer classes.
         event.registerEntityRenderer(BHXEntityRegistry.AMETHYST_DECREE_CASTER_RING.get(), AmethystDecreeCasterRingRenderer::new);

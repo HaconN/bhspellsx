@@ -4,5 +4,11 @@
   "effect.bhspellsx.embracing_bosom": "Embracing Bosom",
 
   "spell.bhspellsx.amethyst_decree": "Amethyst Decree",
-  "spell.bhspellsx.amethyst_decree.guide": "Channel to erupt a burst of amethyst around you. Enemies caught in the blast take heavy damage, are rooted and stunned, and are weakened while lingering crystal damage wears them down."
+  "spell.bhspellsx.amethyst_decree.guide": "Channel to erupt a burst of amethyst around you. Enemies caught in the blast take heavy damage, are rooted and stunned, and are weakened while lingering crystal damage wears them down.",
+
+  "spell.bhspellsx.crystal_hydro_dome": "Crystal Hydro-Dome",
+  "spell.bhspellsx.crystal_hydro_dome.guide": "Raise a warding dome of water and crystal around you. Allies inside are cleansed and healed, damage they take is redirected into the dome's own strength, and outside attackers are struck back with lightning. Incoming projectiles are blocked or reflected at the boundary.",
+
+  "ui.bhspellsx.crystal_hydro_dome_hp_label": "เลือดของโดม",
+  "ui.bhspellsx.crystal_hydro_dome_hp_value": "%s/%s"
 }

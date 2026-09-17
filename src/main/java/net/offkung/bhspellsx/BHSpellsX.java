@@ -9,6 +9,8 @@ import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.registries.ForgeRegistries;
 import net.offkung.bhspellsx.entity.spells.amethyst_decree.AmethystDecreeAoe;
+import net.offkung.bhspellsx.entity.spells.crystal_hydro_dome.CrystalHydroDomeAoe;
+import net.offkung.bhspellsx.event.CrystalHydroDomeEvents;
 import net.offkung.bhspellsx.event.EmbracingBosomEvents;
 import net.offkung.bhspellsx.registry.BHXEntityRegistry;
 import net.offkung.bhspellsx.registry.BHXMobEffectRegistry;
@@ -37,6 +39,7 @@ public class BHSpellsX {
         // here rather than via @Mod.EventBusSubscriber, matching bhspells' own house style
         // (see BypassDamageEvent/SwordDashManager in the real bhspells mod).
         MinecraftForge.EVENT_BUS.register(EmbracingBosomEvents.class);
+        MinecraftForge.EVENT_BUS.register(CrystalHydroDomeEvents.class);
         modEventBus.addListener(BHSpellsX::checkAmethystDecreeMobEffects);
     }
 
@@ -58,6 +61,17 @@ public class BHSpellsX {
         if (ForgeRegistries.MOB_EFFECTS.getValue(AmethystDecreeAoe.CATACLYSM_STUN_ID) == null) {
             LOGGER.error("amethyst_decree: mob effect '{}' not found (L_Ender's Cataclysm missing/renamed?) — stun will not apply.",
                     AmethystDecreeAoe.CATACLYSM_STUN_ID);
+        }
+        // crystal_hydro_dome re-applies horizontalstop+verticalstop every tick to its caster
+        // (NOT efn:stop — rejected after in-game testing, see CrystalHydroDomeAoe's javadoc on
+        // those two ids) — same missing-mod risk as amethyst_decree's use of efn:stop above.
+        if (ForgeRegistries.MOB_EFFECTS.getValue(CrystalHydroDomeAoe.EFN_HORIZONTALSTOP_ID) == null) {
+            LOGGER.error("crystal_hydro_dome: mob effect '{}' not found (Epic Fight Nightfall missing/renamed?) — caster will not be frozen horizontally while the dome is active.",
+                    CrystalHydroDomeAoe.EFN_HORIZONTALSTOP_ID);
+        }
+        if (ForgeRegistries.MOB_EFFECTS.getValue(CrystalHydroDomeAoe.EFN_VERTICALSTOP_ID) == null) {
+            LOGGER.error("crystal_hydro_dome: mob effect '{}' not found (Epic Fight Nightfall missing/renamed?) — caster will not be frozen vertically (no jump lock) while the dome is active.",
+                    CrystalHydroDomeAoe.EFN_VERTICALSTOP_ID);
         }
     }
 }
