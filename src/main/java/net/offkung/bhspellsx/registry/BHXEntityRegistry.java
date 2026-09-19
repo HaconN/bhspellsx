@@ -12,6 +12,8 @@ import net.offkung.bhspellsx.entity.spells.amethyst_decree.AmethystDecreeCasterR
 import net.offkung.bhspellsx.entity.spells.amethyst_decree.AmethystDecreeTargetCrystalEntity;
 import net.offkung.bhspellsx.entity.spells.crystal_hydro_dome.CrystalHydroDomeAoe;
 import net.offkung.bhspellsx.entity.spells.embracing_bosom.EmbracingBosomAoe;
+import net.offkung.bhspellsx.entity.spells.xian_she_huan_ying.XianSheHuanYingTargetEntity;
+import net.offkung.bhspellsx.entity.spells.xian_she_huan_ying.XianSheHuanYingUserEntity;
 
 public class BHXEntityRegistry {
     public static final DeferredRegister<EntityType<?>> ENTITY_TYPES =
@@ -61,6 +63,22 @@ public class BHXEntityRegistry {
                     .sized(12.0f, 6.0f)
                     .clientTrackingRange(64)
                     .build(ResourceLocation.fromNamespaceAndPath("bhspellsx", "crystal_hydro_dome_aoe").toString()));
+
+    // Xian She Huan Ying: decorative/lifecycle entities, no hitbox that matters (Entity, not a
+    // Projectile). Tracking range matches amethyst_decree.
+    public static final RegistryObject<EntityType<XianSheHuanYingUserEntity>> XIAN_SHE_HUAN_YING_USER =
+            ENTITY_TYPES.register("xian_she_huan_ying_user", () -> EntityType.Builder
+                    .<XianSheHuanYingUserEntity>of(XianSheHuanYingUserEntity::new, MobCategory.MISC)
+                    .sized(0.5f, 0.5f)
+                    .clientTrackingRange(64)
+                    .build(ResourceLocation.fromNamespaceAndPath("bhspellsx", "xian_she_huan_ying_user").toString()));
+
+    public static final RegistryObject<EntityType<XianSheHuanYingTargetEntity>> XIAN_SHE_HUAN_YING_TARGET =
+            ENTITY_TYPES.register("xian_she_huan_ying_target", () -> EntityType.Builder
+                    .<XianSheHuanYingTargetEntity>of(XianSheHuanYingTargetEntity::new, MobCategory.MISC)
+                    .sized(0.5f, 0.5f)
+                    .clientTrackingRange(64)
+                    .build(ResourceLocation.fromNamespaceAndPath("bhspellsx", "xian_she_huan_ying_target").toString()));
 
     public static void register(IEventBus eventBus) {
         ENTITY_TYPES.register(eventBus);

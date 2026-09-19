@@ -11,6 +11,7 @@ import net.minecraftforge.registries.ForgeRegistries;
 import net.offkung.bhspellsx.entity.spells.amethyst_decree.AmethystDecreeAoe;
 import net.offkung.bhspellsx.entity.spells.crystal_hydro_dome.CrystalHydroDomeAoe;
 import net.offkung.bhspellsx.event.CrystalHydroDomeEvents;
+import net.offkung.bhspellsx.event.XianSheHuanYingEvents;
 import net.offkung.bhspellsx.event.EmbracingBosomEvents;
 import net.offkung.bhspellsx.registry.BHXEntityRegistry;
 import net.offkung.bhspellsx.registry.BHXMobEffectRegistry;
@@ -40,6 +41,7 @@ public class BHSpellsX {
         // (see BypassDamageEvent/SwordDashManager in the real bhspells mod).
         MinecraftForge.EVENT_BUS.register(EmbracingBosomEvents.class);
         MinecraftForge.EVENT_BUS.register(CrystalHydroDomeEvents.class);
+        MinecraftForge.EVENT_BUS.register(XianSheHuanYingEvents.class);
         modEventBus.addListener(BHSpellsX::checkAmethystDecreeMobEffects);
     }
 

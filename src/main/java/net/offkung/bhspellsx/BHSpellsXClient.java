@@ -38,6 +38,9 @@ public class BHSpellsXClient {
         // renderer classes.
         event.registerEntityRenderer(BHXEntityRegistry.AMETHYST_DECREE_CASTER_RING.get(), AmethystDecreeCasterRingRenderer::new);
         event.registerEntityRenderer(BHXEntityRegistry.AMETHYST_DECREE_TARGET_CRYSTAL.get(), AmethystDecreeTargetCrystalRenderer::new);
+        // Xian She Huan Ying round 1: logic only (vanilla particles), so no-render placeholders.
+        event.registerEntityRenderer(BHXEntityRegistry.XIAN_SHE_HUAN_YING_USER.get(), NoopRenderer::new);
+        event.registerEntityRenderer(BHXEntityRegistry.XIAN_SHE_HUAN_YING_TARGET.get(), NoopRenderer::new);
     }
 
     @SubscribeEvent

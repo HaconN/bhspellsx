@@ -9,6 +9,15 @@
   "spell.bhspellsx.crystal_hydro_dome": "Crystal Hydro-Dome",
   "spell.bhspellsx.crystal_hydro_dome.guide": "Raise a warding dome of water and crystal around you. Allies inside are cleansed and healed, damage they take is redirected into the dome's own strength, and outside attackers are struck back with lightning. Incoming projectiles are blocked or reflected at the boundary.",
 
+  "spell.bhspellsx.xian_she_huan_ying": "Xian She Huan Ying",
+  "spell.bhspellsx.xian_she_huan_ying.guide": "Toggle to lock onto the target you are looking at. While locked they are slowed and you are empowered; it ends when you toggle it off, run out of mana, either of you dies, or you change dimension.",
+  "ui.bhspellsx.xian_she_huan_ying_no_target": "ไม่พบเป้าหมาย",
+  "ui.bhspellsx.xian_she_huan_ying_locked": "ล็อคเป้า %s แล้ว",
+  "ui.bhspellsx.xian_she_huan_ying_cancel": "ยกเลิกล็อคเป้า",
+  "ui.bhspellsx.xian_she_huan_ying_no_soul": "โซลหมด ล็อคเป้าสลายไป",
+  "ui.bhspellsx.xian_she_huan_ying_target_dead": "เหยื่อสิ้นลมแล้ว",
+  "ui.bhspellsx.xian_she_huan_ying_lost": "ล็อคเป้าขาดลง",
+
   "ui.bhspellsx.crystal_hydro_dome_hp_label": "เลือดของโดม",
   "ui.bhspellsx.crystal_hydro_dome_hp_value": "%s/%s"
 }

@@ -6,6 +6,7 @@ import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.RegistryObject;
 import net.offkung.bhspellsx.spells.gold.AmethystDecreeSpell;
+import net.offkung.bhspellsx.spells.gold.XianSheHuanYingSpell;
 import net.offkung.bhspellsx.spells.ground.EmbracingBosomSpell;
 import net.offkung.bhspellsx.spells.water.CrystalHydroDomeSpell;
 
@@ -26,6 +27,9 @@ public class BHXSpellRegistry {
 
     public static final RegistryObject<AbstractSpell> CRYSTAL_HYDRO_DOME =
             registerSpell(new CrystalHydroDomeSpell());
+
+    public static final RegistryObject<AbstractSpell> XIAN_SHE_HUAN_YING =
+            registerSpell(new XianSheHuanYingSpell());
 
     private static RegistryObject<AbstractSpell> registerSpell(AbstractSpell spell) {
         return SPELLS.register(spell.getSpellName(), () -> spell);
