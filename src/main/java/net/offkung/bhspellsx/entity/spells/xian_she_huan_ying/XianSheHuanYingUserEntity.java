@@ -3,6 +3,9 @@ package net.offkung.bhspellsx.entity.spells.xian_she_huan_ying;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.network.syncher.EntityDataSerializers;
+import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -13,6 +16,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.Level;
 import net.offkung.bhspellsx.registry.BHXEntityRegistry;
 
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -38,6 +42,11 @@ import java.util.UUID;
  * stripped here so Apoli's sync power sees "toggle on, tag missing" and switches the toggle off.
  */
 public class XianSheHuanYingUserEntity extends Entity {
+    /** Caster's UUID, synced to clients so the renderer can find the caster and follow the
+     *  caster's own interpolated position/yaw (render-only; the server never reads it back). */
+    private static final EntityDataAccessor<Optional<UUID>> DATA_OWNER_UUID =
+            SynchedEntityData.defineId(XianSheHuanYingUserEntity.class, EntityDataSerializers.OPTIONAL_UUID);
+
     private UUID ownerId;
     private UUID targetId;
     private UUID targetEntityId;
@@ -51,12 +60,18 @@ public class XianSheHuanYingUserEntity extends Entity {
     public XianSheHuanYingUserEntity(Level level, LivingEntity owner, LivingEntity target) {
         this(BHXEntityRegistry.XIAN_SHE_HUAN_YING_USER.get(), level);
         this.ownerId = owner.getUUID();
+        this.entityData.set(DATA_OWNER_UUID, Optional.of(owner.getUUID()));
         this.targetId = target.getUUID();
         this.setPos(owner.getX(), owner.getY(), owner.getZ());
     }
 
     public UUID getOwnerId() {
         return this.ownerId;
+    }
+
+    /** Client-side accessor for the synced caster UUID (null until synced). */
+    public UUID getSyncedOwnerId() {
+        return this.entityData.get(DATA_OWNER_UUID).orElse(null);
     }
 
     /** Called once by the spell after it spawns the target-side entity. */
@@ -96,6 +111,9 @@ public class XianSheHuanYingUserEntity extends Entity {
             return;
         }
         this.setPos(ownerLiving.getX(), ownerLiving.getY(), ownerLiving.getZ());
+        // Render-only fallback: used by the renderer only if the caster can't be found client-side.
+        // Nothing server-side reads it.
+        this.setYRot(ownerLiving.getYRot());
 
         if (this.tickCount % XianSheHuanYingConstants.SLOW_REFRESH_INTERVAL_TICKS == 0) {
             // Plain addEffect, never a forced replace, and never removed on discard: a stronger
@@ -104,10 +122,10 @@ public class XianSheHuanYingUserEntity extends Entity {
                     XianSheHuanYingConstants.SLOW_DURATION_TICKS, XianSheHuanYingConstants.SLOW_AMPLIFIER,
                     false, true, true));
         }
-        if (this.tickCount % XianSheHuanYingConstants.VFX_INTERVAL_TICKS == 0) {
-            // Temporary round-1 VFX: soul particles around the caster.
+        if (this.tickCount % XianSheHuanYingConstants.SOUL_INTERVAL_TICKS == 0) {
+            // Faint soul smoke around the caster; the billboard is the main visual.
             serverLevel.sendParticles(ParticleTypes.SOUL, ownerLiving.getX(), ownerLiving.getY() + 1.0,
-                    ownerLiving.getZ(), 3, 0.5, 0.7, 0.5, 0.01);
+                    ownerLiving.getZ(), XianSheHuanYingConstants.SOUL_PARTICLE_COUNT, 0.5, 0.7, 0.5, 0.01);
         }
     }
 
@@ -149,6 +167,7 @@ public class XianSheHuanYingUserEntity extends Entity {
 
     @Override
     protected void defineSynchedData() {
+        this.entityData.define(DATA_OWNER_UUID, Optional.empty());
     }
 
     @Override

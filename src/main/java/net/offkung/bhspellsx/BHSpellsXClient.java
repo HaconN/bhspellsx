@@ -13,6 +13,7 @@ import net.offkung.bhspellsx.client.renderer.AmethystDecreeCasterRingRenderer;
 import net.offkung.bhspellsx.client.renderer.AmethystDecreeTargetCrystalRenderer;
 import net.offkung.bhspellsx.client.renderer.CrystalHydroDomeRenderer;
 import net.offkung.bhspellsx.client.renderer.EmbracingBosomRingRenderer;
+import net.offkung.bhspellsx.client.renderer.XianSheHuanYingBillboardRenderer;
 import net.offkung.bhspellsx.client.renderer.crystal.CrystalUnitModel;
 import net.offkung.bhspellsx.registry.BHXEntityRegistry;
 import net.offkung.bhspellsx.registry.BHXParticleRegistry;
@@ -38,9 +39,9 @@ public class BHSpellsXClient {
         // renderer classes.
         event.registerEntityRenderer(BHXEntityRegistry.AMETHYST_DECREE_CASTER_RING.get(), AmethystDecreeCasterRingRenderer::new);
         event.registerEntityRenderer(BHXEntityRegistry.AMETHYST_DECREE_TARGET_CRYSTAL.get(), AmethystDecreeTargetCrystalRenderer::new);
-        // Xian She Huan Ying round 1: logic only (vanilla particles), so no-render placeholders.
-        event.registerEntityRenderer(BHXEntityRegistry.XIAN_SHE_HUAN_YING_USER.get(), NoopRenderer::new);
-        event.registerEntityRenderer(BHXEntityRegistry.XIAN_SHE_HUAN_YING_TARGET.get(), NoopRenderer::new);
+        // Xian She Huan Ying: one shared billboard renderer, two styles (snake / eye).
+        event.registerEntityRenderer(BHXEntityRegistry.XIAN_SHE_HUAN_YING_USER.get(), XianSheHuanYingBillboardRenderer::forUser);
+        event.registerEntityRenderer(BHXEntityRegistry.XIAN_SHE_HUAN_YING_TARGET.get(), XianSheHuanYingBillboardRenderer::forTarget);
     }
 
     @SubscribeEvent

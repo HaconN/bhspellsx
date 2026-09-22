@@ -1,7 +1,9 @@
 package net.offkung.bhspellsx.entity.spells.xian_she_huan_ying;
 
-import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.network.syncher.EntityDataSerializers;
+import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -9,6 +11,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.Level;
 import net.offkung.bhspellsx.registry.BHXEntityRegistry;
 
+import java.util.OptionalInt;
 import java.util.UUID;
 
 /**
@@ -18,6 +21,12 @@ import java.util.UUID;
  * outlive it. Never saved.
  */
 public class XianSheHuanYingTargetEntity extends Entity {
+    /** The locked target's entity id, synced to clients so the renderer can look it up with
+     *  level().getEntity(id) and follow its own interpolated position (render-only; the server
+     *  never reads it back). An id, not a UUID, because the target can be a mob. */
+    private static final EntityDataAccessor<OptionalInt> DATA_TARGET_ENTITY_ID =
+            SynchedEntityData.defineId(XianSheHuanYingTargetEntity.class, EntityDataSerializers.OPTIONAL_UNSIGNED_INT);
+
     private UUID targetId;
     private UUID controllerId;
 
@@ -27,9 +36,15 @@ public class XianSheHuanYingTargetEntity extends Entity {
         this.setNoGravity(true);
     }
 
+    /** Client-side accessor for the synced target entity id (empty until synced). */
+    public OptionalInt getSyncedTargetEntityId() {
+        return this.entityData.get(DATA_TARGET_ENTITY_ID);
+    }
+
     public XianSheHuanYingTargetEntity(Level level, LivingEntity target, UUID controllerId) {
         this(BHXEntityRegistry.XIAN_SHE_HUAN_YING_TARGET.get(), level);
         this.targetId = target.getUUID();
+        this.entityData.set(DATA_TARGET_ENTITY_ID, OptionalInt.of(target.getId()));
         this.controllerId = controllerId;
         this.setPos(target.getX(), target.getY(), target.getZ());
     }
@@ -51,12 +66,6 @@ public class XianSheHuanYingTargetEntity extends Entity {
             return;
         }
         this.setPos(target.getX(), target.getY(), target.getZ());
-
-        if (this.tickCount % XianSheHuanYingConstants.VFX_INTERVAL_TICKS == 0) {
-            // Temporary round-1 VFX: marker above the target's head.
-            serverLevel.sendParticles(ParticleTypes.END_ROD, target.getX(), target.getY() + target.getBbHeight() + 0.6,
-                    target.getZ(), 2, 0.15, 0.1, 0.15, 0.01);
-        }
     }
 
     @Override
@@ -71,6 +80,7 @@ public class XianSheHuanYingTargetEntity extends Entity {
 
     @Override
     protected void defineSynchedData() {
+        this.entityData.define(DATA_TARGET_ENTITY_ID, OptionalInt.empty());
     }
 
     @Override
