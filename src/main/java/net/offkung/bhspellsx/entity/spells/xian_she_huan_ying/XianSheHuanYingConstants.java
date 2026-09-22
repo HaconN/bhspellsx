@@ -172,6 +172,37 @@ public final class XianSheHuanYingConstants {
      *  gathers rather than popping in all at once. */
     public static final int CLOUD_APPEAR_STAGGER_TICKS = 3;
 
+    // ---- Tail smoke: vanilla particles along the fading tail (round 11, replacing round 9/10's
+    // quad-based tail clouds entirely). Spawned from XianSheHuanYingUserEntity's CLIENT tick
+    // (never the renderer, so the rate doesn't wobble with framerate) via the client-only
+    // XianSheHuanYingTailParticleEmitter. Path points and the pixel->local conversion match
+    // renderQuad's own centered, unflipped UV mapping (see XianSheHuanYingSnakePose /
+    // XianSheHuanYingUserEntity for the full pixel -> local -> world pipeline). -----------------
+
+    /** Pixel path (256x256 source art) the tail fades along — a random point is picked per spawn
+     *  by choosing one of the 3 segments between these 4 points, then lerping along it. */
+    public static final int[] TAIL_PATH_PIXEL_X = {130, 165, 195, 222};
+    public static final int[] TAIL_PATH_PIXEL_Y = {204, 208, 215, 226};
+
+    /** Full ResourceLocation string of the particle to spawn — swap without touching code. */
+    public static final String TAIL_PARTICLE = "minecraft:poof";
+    /** Spawn PROBABILITY per client tick (0-1), not a literal count — poof reads as a fairly big
+     *  puff, so this is deliberately low to stay a thin trail rather than a solid cloud. */
+    public static final float TAIL_PARTICLES_PER_TICK = 0.15f;
+    /** Random offset (blocks, in the snake quad's own local x/y space) added after the pixel path
+     *  point is converted to local coordinates. */
+    public static final float TAIL_PARTICLE_JITTER = 0.05f;
+    /** Slow upward drift, blocks/tick. */
+    public static final float TAIL_PARTICLE_RISE_SPEED = 0.01f;
+    /** Small random outward drift magnitude (world X/Z), blocks/tick — "ลอยออกสุ่มเล็กน้อย". */
+    public static final float TAIL_PARTICLE_DRIFT_SPEED = 0.01f;
+    /** Nudge along the snake quad's own local +Z (toward the viewer) before rotating by camera
+     *  orientation — keeps spawned particles off the snake billboard's own plane (avoids
+     *  billboard-vs-billboard z-fighting) and in front of it, so the tail texture's own
+     *  partial-alpha depth writes near the fade can't clip them. Same axis/direction the
+     *  tail-cloud quads' depth offset used before they were replaced by these particles. */
+    public static final float TAIL_PARTICLE_DEPTH_OFFSET = 0.15f;
+
     // ---- [Optional] texture filter switch (round 3) ----------------------------------------------
 
     /** false = nearest filtering (pixel-sharp, current look). true = linear filtering (blurred).

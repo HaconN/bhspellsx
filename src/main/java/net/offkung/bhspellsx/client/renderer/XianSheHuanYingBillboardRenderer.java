@@ -20,6 +20,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 import net.offkung.bhspellsx.entity.spells.xian_she_huan_ying.XianSheHuanYingConstants;
+import net.offkung.bhspellsx.entity.spells.xian_she_huan_ying.XianSheHuanYingSnakePose;
 import net.offkung.bhspellsx.entity.spells.xian_she_huan_ying.XianSheHuanYingTargetEntity;
 import net.offkung.bhspellsx.entity.spells.xian_she_huan_ying.XianSheHuanYingUserEntity;
 import org.joml.Matrix3f;
@@ -87,6 +88,7 @@ public class XianSheHuanYingBillboardRenderer<T extends Entity> extends EntityRe
     private static final float[] CLOUD_HEIGHTS = {
             XianSheHuanYingConstants.CLOUD_A_HEIGHT, XianSheHuanYingConstants.CLOUD_B_HEIGHT,
             XianSheHuanYingConstants.CLOUD_C_HEIGHT, XianSheHuanYingConstants.CLOUD_D_HEIGHT};
+
 
     public enum Placement { BEHIND_OWNER, ABOVE_ENTITY }
 
@@ -166,10 +168,6 @@ public class XianSheHuanYingBillboardRenderer<T extends Entity> extends EntityRe
 
         // Minecraft yaw: forward = (-sin(yaw), +cos(yaw)) in (x, z). Behind = the opposite.
         double yawRad = Math.toRadians(yawDeg);
-        double back = XianSheHuanYingConstants.SNAKE_BACK_DISTANCE;
-        double snakeOffX = ownerOffX + Math.sin(yawRad) * back;
-        double snakeOffZ = ownerOffZ - Math.cos(yawRad) * back;
-        double snakeOffY = ownerOffY + XianSheHuanYingConstants.SNAKE_CENTER_HEIGHT;
 
         double bob = Math.sin(age * (Mth.TWO_PI / XianSheHuanYingConstants.BOB_PERIOD_TICKS))
                 * XianSheHuanYingConstants.BOB_AMPLITUDE;
@@ -177,9 +175,21 @@ public class XianSheHuanYingBillboardRenderer<T extends Entity> extends EntityRe
         float snakeVisible = visibleFactor(user.isDismissing(), user.getDismissStartTick(), age, 0,
                 XianSheHuanYingConstants.APPEAR_TICKS);
         double snakeRise = XianSheHuanYingConstants.APPEAR_RISE_DISTANCE * (1.0 - snakeVisible);
+
+        // Shared with the tail-particle emitter in XianSheHuanYingUserEntity's client tick — see
+        // XianSheHuanYingSnakePose's own javadoc for why this formula lives in one place.
+        double[] snakeCenter = XianSheHuanYingSnakePose.centerOffset(yawRad, bob, snakeRise);
+        double snakeOffX = ownerOffX + snakeCenter[0];
+        double snakeQuadY = ownerOffY + snakeCenter[1];
+        double snakeOffZ = ownerOffZ + snakeCenter[2];
+
+        // translucent=true (round 9): the snake uses its own soft-edged tail-fade texture now, so
+        // it draws through vanilla entityTranslucent's exact shard recipe instead of cutout — see
+        // snakeTranslucentRenderType(). Every other quad here (mist, eyes, aura) is unaffected.
         renderQuad(poseStack, buffer, packedLight, this.style.texture(),
-                snakeOffX, snakeOffY + bob - snakeRise, snakeOffZ,
-                this.style.width() * snakeVisible, this.style.height() * snakeVisible);
+                snakeOffX, snakeQuadY, snakeOffZ,
+                this.style.width() * snakeVisible, this.style.height() * snakeVisible,
+                0.0f, false, true);
 
         renderMist(user, ownerOffX, ownerOffY, ownerOffZ, snakeOffX, snakeOffZ,
                 age, poseStack, buffer, packedLight);
@@ -444,10 +454,24 @@ public class XianSheHuanYingBillboardRenderer<T extends Entity> extends EntityRe
 
     /** Same as the 9-arg overload, plus a localOffsetX (applied AFTER the camera-orientation pose,
      *  i.e. in screen space — used to lay the two eyes side by side at a view-independent gap) and
-     *  a U-mirror flag (used for the left eye, since the source art is a single right eye). */
+     *  a U-mirror flag (used for the left eye, since the source art is a single right eye). Always
+     *  cutout (see the 12-arg overload for the snake's translucent quad). */
     private void renderQuad(PoseStack poseStack, MultiBufferSource buffer, int packedLight,
                             ResourceLocation texture, double dx, double dy, double dz,
                             float width, float height, float localOffsetX, boolean mirrorU) {
+        renderQuad(poseStack, buffer, packedLight, texture, dx, dy, dz, width, height, localOffsetX, mirrorU, false);
+    }
+
+    /** Full form: adds {@code translucent} — false (the default from every other overload) draws
+     *  through {@link #billboardRenderType} (opaque cutout, as every other quad here still does);
+     *  true draws through {@link #snakeTranslucentRenderType} instead (round 9: the snake only,
+     *  for its new soft-edged tail-fade texture). Everything else about the quad — full-axis
+     *  billboard, optional screen-space offset/U-mirror, brightness handling — is identical either
+     *  way; only the RenderType (and therefore the blend/cull state) differs. */
+    private void renderQuad(PoseStack poseStack, MultiBufferSource buffer, int packedLight,
+                            ResourceLocation texture, double dx, double dy, double dz,
+                            float width, float height, float localOffsetX, boolean mirrorU,
+                            boolean translucent) {
         if (width <= 0.0f || height <= 0.0f) {
             return;
         }
@@ -465,7 +489,11 @@ public class XianSheHuanYingBillboardRenderer<T extends Entity> extends EntityRe
         PoseStack.Pose pose = poseStack.last();
         Matrix4f matrix = pose.pose();
         Matrix3f normal = pose.normal();
-        VertexConsumer consumer = buffer.getBuffer(billboardRenderType(texture));
+        RenderType renderType = translucent ? snakeTranslucentRenderType(texture) : billboardRenderType(texture);
+        VertexConsumer consumer = buffer.getBuffer(renderType);
+        // Same brightness switch as every other quad here — the RenderType change (cutout vs
+        // translucent) has no bearing on this; full-bright vs. world light is entirely this
+        // uv2(light) value, set identically regardless of which RenderType drew the quad.
         int light = XianSheHuanYingConstants.RENDER_FULL_BRIGHT ? LightTexture.FULL_BRIGHT : packedLight;
         float hw = width * 0.5f;
         float hh = height * 0.5f;
@@ -544,6 +572,47 @@ public class XianSheHuanYingBillboardRenderer<T extends Entity> extends EntityRe
                     .createCompositeState(true);
             return RenderType.create("bhspellsx_xian_she_huan_ying_billboard",
                     DefaultVertexFormat.NEW_ENTITY, VertexFormat.Mode.QUADS, 256, false, false, state);
+        }
+    }
+
+    // ---- Custom RenderType for the snake ONLY: vanilla entityTranslucent's exact shard recipe,
+    // just with blur switchable via TEXTURE_SMOOTH like the cutout one above (round 9). ----------
+
+    /** Decompiled from the mapped Forge jar (RenderType$lambda$static$7, the body behind
+     *  {@code RenderType.entityTranslucent(ResourceLocation, boolean)}): shader
+     *  RENDERTYPE_ENTITY_TRANSLUCENT_SHADER, transparency TRANSLUCENT_TRANSPARENCY (standard
+     *  src-alpha/one-minus-src-alpha blend — confirmed NOT additive, which uses ONE/ONE), cull
+     *  NO_CULL (vanilla's own entityTranslucent is double-sided too — no change in
+     *  double-sidedness from the cutout RenderType this replaces for the snake), lightmap
+     *  LIGHTMAP, overlay OVERLAY. The only difference from vanilla's own factory: blur comes from
+     *  TEXTURE_SMOOTH instead of always false, same reasoning as BillboardRenderType above. */
+    private static final ConcurrentHashMap<ResourceLocation, RenderType> SNAKE_RENDER_TYPE_CACHE = new ConcurrentHashMap<>();
+
+    private static RenderType snakeTranslucentRenderType(ResourceLocation texture) {
+        return SNAKE_RENDER_TYPE_CACHE.computeIfAbsent(texture, SnakeTranslucentRenderType::create);
+    }
+
+    private static final class SnakeTranslucentRenderType extends RenderType {
+        private SnakeTranslucentRenderType(String name, VertexFormat format, VertexFormat.Mode mode,
+                                           int bufferSize, boolean crumbling, boolean sort,
+                                           Runnable setup, Runnable teardown) {
+            super(name, format, mode, bufferSize, crumbling, sort, setup, teardown);
+        }
+
+        static RenderType create(ResourceLocation texture) {
+            RenderType.CompositeState state = RenderType.CompositeState.builder()
+                    .setShaderState(RENDERTYPE_ENTITY_TRANSLUCENT_SHADER)
+                    .setTextureState(new RenderStateShard.TextureStateShard(
+                            texture, XianSheHuanYingConstants.TEXTURE_SMOOTH, false))
+                    .setTransparencyState(TRANSLUCENT_TRANSPARENCY)
+                    .setCullState(NO_CULL)
+                    .setLightmapState(LIGHTMAP)
+                    .setOverlayState(OVERLAY)
+                    .createCompositeState(true);
+            // The trailing (boolean, boolean) pair mirrors vanilla's own entityTranslucent exactly
+            // (decompiled: iconst_1, iconst_1 — cutout above uses iconst_0, iconst_0 instead).
+            return RenderType.create("bhspellsx_xian_she_huan_ying_snake_translucent",
+                    DefaultVertexFormat.NEW_ENTITY, VertexFormat.Mode.QUADS, 256, true, true, state);
         }
     }
 }
