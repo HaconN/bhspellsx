@@ -21,17 +21,29 @@ import java.util.UUID;
 
 /**
  * User-side half of Xian She Huan Ying, and the owner of the whole lifecycle. Every server tick
- * it resolves the caster and the locked target by UUID (never a held Entity reference) via
- * ServerLevel#getEntity — same pattern as AmethystDecreeTargetCrystalEntity — and it discards
- * itself, and the paired target-side entity, the moment any of these is true:
+ * (while not already dismissing) it resolves the caster and the locked target by UUID (never a
+ * held Entity reference) via ServerLevel#getEntity — same pattern as
+ * AmethystDecreeTargetCrystalEntity.
+ * <p>
+ * This is the single source of truth for every end condition (the caster losing
+ * {@link XianSheHuanYingConstants#OWNER_TAG}, either side dying, either side becoming
+ * unresolvable) — the paired target-side entity no longer checks any of these itself; it only
+ * reacts to {@link #beginDismissing}. Two ways an end condition resolves:
  * <ul>
- *   <li>the caster no longer has {@link XianSheHuanYingConstants#OWNER_TAG} (Apoli's toggle-off
- *       and mana-out both funnel through removing that tag);</li>
- *   <li>the caster or the target can't be resolved in this level (logged out, changed
- *       dimension, chunk unloaded) or is dead.</li>
+ *   <li><b>Hard discard, no animation</b> — only when the caster or the target can't be resolved
+ *       in this level AT ALL (logged out, changed dimension, chunk unloaded). There's no position
+ *       left to hold a closing animation at, so the safer choice (per spec) is to end instantly
+ *       rather than risk a lingering entity anchored to nothing.</li>
+ *   <li><b>Graceful dismiss</b> — every other end condition (tag removed, either side actually
+ *       dead but still resolvable/has a last position, target unreachable-but-alive is NOT a
+ *       thing here so not listed) enters the "dismissing" state via {@link #beginDismissing} for
+ *       {@link XianSheHuanYingConstants#DISMISS_TICKS}, then discards. {@link #tickDismissing}
+ *       deliberately re-checks nothing — it is a pure, unconditional countdown to discard, so
+ *       there is no path that can dismiss forever.</li>
  * </ul>
- * There is no fixed lifetime. Slowness I is applied with a short duration and refreshed on an
- * interval, and is never removed on discard, so the target is freed by expiry alone.
+ * There is no fixed lifetime otherwise. Slowness I is applied with a short duration and refreshed
+ * on an interval while running, and is never removed on discard/dismiss start — the target is
+ * freed by expiry alone, per spec.
  * <p>
  * Extends plain Entity, not AoeEntity like the crystal entities: AoeEntity.tick() discards
  * itself after its 600-tick default duration, which is wrong for an unbounded lifetime. The
@@ -46,6 +58,16 @@ public class XianSheHuanYingUserEntity extends Entity {
      *  caster's own interpolated position/yaw (render-only; the server never reads it back). */
     private static final EntityDataAccessor<Optional<UUID>> DATA_OWNER_UUID =
             SynchedEntityData.defineId(XianSheHuanYingUserEntity.class, EntityDataSerializers.OPTIONAL_UUID);
+    /** True once an end condition has fired and this is just counting down to discard — see the
+     *  class javadoc. Render-only downstream (drives the reverse-appear animation); the tag/mana
+     *  side of ending is already final by the time this flips. */
+    private static final EntityDataAccessor<Boolean> DATA_DISMISSING =
+            SynchedEntityData.defineId(XianSheHuanYingUserEntity.class, EntityDataSerializers.BOOLEAN);
+    /** This entity's own tickCount value at the moment dismissing began — the renderer computes
+     *  "ticks into the close animation" as entity.tickCount - this, exactly mirroring how the
+     *  appear animation already reads entity.tickCount directly. */
+    private static final EntityDataAccessor<Integer> DATA_DISMISS_START_TICK =
+            SynchedEntityData.defineId(XianSheHuanYingUserEntity.class, EntityDataSerializers.INT);
 
     private UUID ownerId;
     private UUID targetId;
@@ -74,6 +96,14 @@ public class XianSheHuanYingUserEntity extends Entity {
         return this.entityData.get(DATA_OWNER_UUID).orElse(null);
     }
 
+    public boolean isDismissing() {
+        return this.entityData.get(DATA_DISMISSING);
+    }
+
+    public int getDismissStartTick() {
+        return this.entityData.get(DATA_DISMISS_START_TICK);
+    }
+
     /** Called once by the spell after it spawns the target-side entity. */
     public void setTargetEntityId(UUID id) {
         this.targetEntityId = id;
@@ -85,29 +115,50 @@ public class XianSheHuanYingUserEntity extends Entity {
         if (this.level().isClientSide() || this.isRemoved()) {
             return;
         }
-        if (!(this.level() instanceof ServerLevel serverLevel) || this.ownerId == null || this.targetId == null) {
+        if (!(this.level() instanceof ServerLevel serverLevel)) {
+            this.discard();
+            return;
+        }
+        if (this.isDismissing()) {
+            tickDismissing(serverLevel);
+            return;
+        }
+        if (this.ownerId == null || this.targetId == null) {
             this.discard();
             return;
         }
         Entity owner = serverLevel.getEntity(this.ownerId);
-        if (!(owner instanceof LivingEntity ownerLiving) || !ownerLiving.isAlive()) {
-            // Owner dead, or not in this level any more (changed dimension). Logged out: no
-            // player in the list, nothing is sent.
+        if (!(owner instanceof LivingEntity ownerLiving)) {
+            // Owner not resolvable in this level at all (logged out, changed dimension, chunk
+            // unloaded) — no reliable position to hold a dismiss animation at, so (per spec) this
+            // is the one case that still ends instantly rather than dismissing.
             notifyOwner(serverLevel, "ui.bhspellsx.xian_she_huan_ying_lost");
             this.discard();
             return;
         }
+        if (!ownerLiving.isAlive()) {
+            // Owner resolved but dead: the corpse is still a valid position for a few ticks, so
+            // this dismisses gracefully instead of vanishing mid-death.
+            notifyOwner(serverLevel, "ui.bhspellsx.xian_she_huan_ying_lost");
+            beginDismissing(serverLevel);
+            return;
+        }
         if (!ownerLiving.getTags().contains(XianSheHuanYingConstants.OWNER_TAG)) {
-            this.discard();
+            beginDismissing(serverLevel);
             return;
         }
         Entity resolved = serverLevel.getEntity(this.targetId);
-        if (!(resolved instanceof LivingEntity target) || !target.isAlive()) {
-            notifyOwner(serverLevel, resolved instanceof LivingEntity
-                    ? "ui.bhspellsx.xian_she_huan_ying_target_dead"
-                    : "ui.bhspellsx.xian_she_huan_ying_lost");
+        if (!(resolved instanceof LivingEntity target)) {
+            // Target not resolvable at all — same reasoning as the owner-missing case above.
+            notifyOwner(serverLevel, "ui.bhspellsx.xian_she_huan_ying_lost");
             ownerLiving.removeTag(XianSheHuanYingConstants.OWNER_TAG);
             this.discard();
+            return;
+        }
+        if (!target.isAlive()) {
+            notifyOwner(serverLevel, "ui.bhspellsx.xian_she_huan_ying_target_dead");
+            ownerLiving.removeTag(XianSheHuanYingConstants.OWNER_TAG);
+            beginDismissing(serverLevel);
             return;
         }
         this.setPos(ownerLiving.getX(), ownerLiving.getY(), ownerLiving.getZ());
@@ -118,14 +169,49 @@ public class XianSheHuanYingUserEntity extends Entity {
         if (this.tickCount % XianSheHuanYingConstants.SLOW_REFRESH_INTERVAL_TICKS == 0) {
             // Plain addEffect, never a forced replace, and never removed on discard: a stronger
             // or longer Slowness from someone else is left alone, ours simply expires.
+            // showParticles=false (round 7: the billboard/aura are the visual now, the swirling
+            // effect particles were redundant clutter); showIcon stays true.
             target.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN,
                     XianSheHuanYingConstants.SLOW_DURATION_TICKS, XianSheHuanYingConstants.SLOW_AMPLIFIER,
-                    false, true, true));
+                    false, false, true));
         }
         if (this.tickCount % XianSheHuanYingConstants.SOUL_INTERVAL_TICKS == 0) {
             // Faint soul smoke around the caster; the billboard is the main visual.
             serverLevel.sendParticles(ParticleTypes.SOUL, ownerLiving.getX(), ownerLiving.getY() + 1.0,
                     ownerLiving.getZ(), XianSheHuanYingConstants.SOUL_PARTICLE_COUNT, 0.5, 0.7, 0.5, 0.01);
+        }
+    }
+
+    /** Enters the dismissing state and tells the target-side entity to do the same, at the same
+     *  moment — see the class javadoc. Slowness is not touched here: it simply stops being
+     *  refreshed (this method always returns out of the normal per-tick body above) and expires
+     *  on its own within SLOW_DURATION_TICKS, per spec. */
+    private void beginDismissing(ServerLevel serverLevel) {
+        this.entityData.set(DATA_DISMISSING, true);
+        this.entityData.set(DATA_DISMISS_START_TICK, this.tickCount);
+        if (this.targetEntityId != null) {
+            Entity marker = serverLevel.getEntity(this.targetEntityId);
+            if (marker instanceof XianSheHuanYingTargetEntity targetEntity) {
+                targetEntity.beginDismissing();
+            }
+        }
+    }
+
+    /** Pure countdown to discard — deliberately re-checks NO end condition (tag, owner/target
+     *  alive-ness, ...), so it can never re-enter the branches above or send another message.
+     *  Cosmetically keeps following the owner if it's still resolvable, purely so the closing
+     *  snake/mist don't freeze mid-air if the owner is still walking around; failing to resolve
+     *  the owner here does not extend or cancel the countdown. */
+    private void tickDismissing(ServerLevel serverLevel) {
+        if (this.ownerId != null) {
+            Entity owner = serverLevel.getEntity(this.ownerId);
+            if (owner instanceof LivingEntity ownerLiving) {
+                this.setPos(ownerLiving.getX(), ownerLiving.getY(), ownerLiving.getZ());
+                this.setYRot(ownerLiving.getYRot());
+            }
+        }
+        if (this.tickCount - this.getDismissStartTick() >= XianSheHuanYingConstants.DISMISS_TICKS) {
+            this.discard();
         }
     }
 
@@ -168,6 +254,8 @@ public class XianSheHuanYingUserEntity extends Entity {
     @Override
     protected void defineSynchedData() {
         this.entityData.define(DATA_OWNER_UUID, Optional.empty());
+        this.entityData.define(DATA_DISMISSING, false);
+        this.entityData.define(DATA_DISMISS_START_TICK, 0);
     }
 
     @Override

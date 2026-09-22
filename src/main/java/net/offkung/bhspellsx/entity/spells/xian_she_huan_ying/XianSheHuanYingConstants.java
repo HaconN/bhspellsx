@@ -12,6 +12,11 @@ public final class XianSheHuanYingConstants {
      *  stop signal the user-side entity listens to — see XianSheHuanYingUserEntity. */
     public static final String OWNER_TAG = "wly_snake";
 
+    /** Ticks both entities spend in their "dismissing" state (see XianSheHuanYingUserEntity's
+     *  class javadoc) between an end condition becoming true and the actual discard — long enough
+     *  for the client to play the reverse-appear/eye-close animation. */
+    public static final int DISMISS_TICKS = 10;
+
     /** Raycast range used once, at cast time, to pick the locked target. */
     public static final float TARGET_RANGE = 64.0f;
 
@@ -42,44 +47,67 @@ public final class XianSheHuanYingConstants {
     public static final float EYE_HEIGHT = 1.0f;
     /** Height of the eye PAIR's CENTER above the target's feet — fallback only, used when the
      *  target can't be found client-side. Normally the renderer uses the target's real
-     *  bounding-box height (see EYE_HEIGHT_MARGIN) instead. */
-    public static final float EYE_CENTER_HEIGHT = 2.6f;
+     *  bounding-box height (see EYE_HEIGHT_MARGIN) instead. Bumped +0.15 in round 7 alongside
+     *  EYE_HEIGHT_MARGIN when EYE_PAIR_SIZE grew, so the bigger pair doesn't sink into the head. */
+    public static final float EYE_CENTER_HEIGHT = 2.75f;
     /** When the target IS found client-side: margin above its real bounding-box top, added to
-     *  the eye pair's center height. */
-    public static final float EYE_HEIGHT_MARGIN = 0.3f;
+     *  the eye pair's center height. Bumped 0.3 -> 0.45 in round 7: the eye pair is centered on
+     *  this height, so growing EYE_PAIR_SIZE by 0.3 (round 7) grows its half-height by 0.15,
+     *  which would otherwise push the bottom edge down into the target's head by that much. */
+    public static final float EYE_HEIGHT_MARGIN = 0.45f;
 
     // ---- Eye pair: two mirrored copies of snake_eye.png above the target's head (round 6) -------
 
     /** Width and height of a single eye quad. */
-    public static final float EYE_PAIR_SIZE = 0.45f;
+    public static final float EYE_PAIR_SIZE = 0.75f;
     /** Center-to-center distance between the two eyes, measured in the VIEWER's screen space (not
      *  world space) so the pair always reads as a fixed-width pair no matter the view angle. */
-    public static final float EYE_PAIR_GAP = 0.55f;
+    public static final float EYE_PAIR_GAP = 0.9f;
     /** "Opening" ease: height goes 0 -> EYE_PAIR_SIZE (width stays fixed), starting this many
      *  ticks after the entity spawns (after the snake has had time to appear first) and taking
-     *  EYE_OPEN_TICKS to finish. */
+     *  EYE_OPEN_TICKS to finish. Uses ease-out-back (see EYE_OPEN_OVERSHOOT) — closing does not,
+     *  it stays a plain ease-in collapse. */
     public static final int EYE_OPEN_DELAY_TICKS = 8;
-    public static final int EYE_OPEN_TICKS = 8;
-    /** "Closing" ease on dismiss, mirroring EYE_OPEN_TICKS — see the renderer javadoc's note on
-     *  why this is NOT currently wired up (needs a decision, not just more code). */
+    public static final int EYE_OPEN_TICKS = 5;
+    /** Ease-out-back overshoot constant (Penner's standard c1), OPENING ONLY. 0 degenerates to a
+     *  plain, strong ease-out cubic with no overshoot; ~1.7 is the conventional "back" default
+     *  (a small overshoot past EYE_PAIR_SIZE before settling). Closing is unaffected. */
+    public static final float EYE_OPEN_OVERSHOOT = 1.7f;
+    /** "Closing" ease on dismiss (plain ease-in, no overshoot) — see renderEyeSide. */
     public static final int EYE_CLOSE_TICKS = 8;
 
-    // ---- Purple weakening aura around the locked target (round 6) ---------------------------------
+    // ---- "Being watched" sound cue, heard by the target only, once per lock (round 8) -----------
 
-    /** One particle every this many ticks (client tick, not frame) — deliberately sparse. */
-    public static final int AURA_INTERVAL_TICKS = 2;
-    /** Horizontal spawn radius around the target's own center. */
-    public static final float AURA_RADIUS_MIN = 0.1f;
-    public static final float AURA_RADIUS_MAX = 0.4f;
-    /** Spawn height as a fraction of the target's own bounding-box height (1.0 = top of head,
-     *  0.0 = feet) — "shoulder" is approximated as most of the way up. */
-    public static final float AURA_SPAWN_HEIGHT_FRACTION = 0.8f;
-    /** Initial downward speed, blocks/tick (vanilla dust particles keep ~90% of their velocity
-     *  each tick, so this doesn't need to be large to visibly drift toward the ground). */
-    public static final float AURA_FALL_SPEED = 0.02f;
-    /** DustParticleOptions' own scale parameter (roughly its render size). */
-    public static final float AURA_SCALE = 0.65f;
-    /** Purple tint, 0-1 per channel (DustParticleOptions takes an RGB Vector3f). */
+    /** Full ResourceLocation string of the sound event to play — swap this to point at any
+     *  registered sound (vanilla or custom) without touching code. Points at the custom
+     *  bhspellsx cue registered in BHXSoundRegistry (assets/bhspellsx/sounds.json +
+     *  sounds/xian_she_huan_ying_eye_stare.ogg); started as a placeholder pointing at vanilla's
+     *  "minecraft:entity.enderman.stare" before that custom sound existed. */
+    public static final String EYE_SOUND = "bhspellsx:xian_she_huan_ying_eye_stare";
+    public static final float EYE_SOUND_VOLUME = 0.4f;
+    public static final float EYE_SOUND_PITCH = 1.0f;
+
+    // ---- Purple weakening aura around the locked target: falling lines, not particles (round 7,
+    // replacing round 6's DustParticleOptions spawner). Drawn directly by the renderer every
+    // frame from time alone (age/phase per line) — no per-line state, no particle entities. -------
+
+    /** How many lines are visible around the target at once. Halved (8 -> 4) in round 8. */
+    public static final int AURA_LINE_COUNT = 4;
+    /** Horizontal distance from the target's own center axis — never 0, so lines ring the body
+     *  instead of bunching at the chest. */
+    public static final float AURA_LINE_RADIUS_MIN = 0.3f;
+    public static final float AURA_LINE_RADIUS_MAX = 0.6f;
+    /** Each line's own length (it's a falling segment, not a full-height beam). */
+    public static final float AURA_LINE_LENGTH_MIN = 0.3f;
+    public static final float AURA_LINE_LENGTH_MAX = 0.6f;
+    /** Line thickness. */
+    public static final float AURA_LINE_WIDTH = 0.05f;
+    /** Fall speed, blocks/tick. */
+    public static final float AURA_LINE_FALL_SPEED = 0.06f;
+    /** How far above the target's own head a line's fall starts (it always ends at the target's
+     *  feet, i.e. the ground reference — see the renderer). */
+    public static final float AURA_LINE_START_ABOVE_HEAD = 0.3f;
+    /** Purple tint, 0-1 per channel, drawn full-bright over a plain white texture. */
     public static final float AURA_COLOR_R = 0.55f;
     public static final float AURA_COLOR_G = 0.15f;
     public static final float AURA_COLOR_B = 0.85f;
