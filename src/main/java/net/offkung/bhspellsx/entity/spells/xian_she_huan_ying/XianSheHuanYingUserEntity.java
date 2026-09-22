@@ -8,16 +8,12 @@ import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.util.Mth;
-import net.minecraft.util.RandomSource;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
-import net.offkung.bhspellsx.client.XianSheHuanYingTailParticleEmitter;
 import net.offkung.bhspellsx.registry.BHXEntityRegistry;
 
 import java.util.Optional;
@@ -116,11 +112,7 @@ public class XianSheHuanYingUserEntity extends Entity {
     @Override
     public void tick() {
         super.tick();
-        if (this.level().isClientSide()) {
-            tickClientTailParticles();
-            return;
-        }
-        if (this.isRemoved()) {
+        if (this.level().isClientSide() || this.isRemoved()) {
             return;
         }
         if (!(this.level() instanceof ServerLevel serverLevel)) {
@@ -233,64 +225,6 @@ public class XianSheHuanYingUserEntity extends Entity {
         if (player != null) {
             player.displayClientMessage(Component.translatable(translationKey), true);
         }
-    }
-
-    /** Client-only: spawns thin vanilla-particle "tail smoke" along the fading tail, timed purely
-     *  to entity.tickCount — never from the renderer (which runs per FRAME, so the spawn rate
-     *  would wobble with framerate). Only once the snake has fully appeared (tickCount reaches
-     *  APPEAR_TICKS, same threshold the renderer's own appear ease uses to reach factor 1.0), and
-     *  never while dismissing. All Minecraft/Camera-touching work lives in
-     *  {@link XianSheHuanYingTailParticleEmitter}, a client-only class — this method (and this
-     *  whole entity class) references no {@code net.minecraft.client.*} type, same split as
-     *  XianSheHuanYingTargetEntity's own eye-sound cue. */
-    private void tickClientTailParticles() {
-        if (this.isRemoved() || this.isDismissing()) {
-            return;
-        }
-        if (this.tickCount < XianSheHuanYingConstants.APPEAR_TICKS) {
-            return;
-        }
-        RandomSource random = this.level().getRandom();
-        if (random.nextFloat() >= XianSheHuanYingConstants.TAIL_PARTICLES_PER_TICK) {
-            return;
-        }
-        UUID ownerId = this.getSyncedOwnerId();
-        if (ownerId == null) {
-            return;
-        }
-        Player owner = this.level().getPlayerByUUID(ownerId);
-        if (owner == null) {
-            return;
-        }
-
-        // Same shared formula the renderer uses for the snake's own center (see
-        // XianSheHuanYingSnakePose) — plain per-tick position/yaw here, no partial-tick
-        // interpolation needed for a particle spawn point, and the snake has already fully
-        // appeared (checked above) so bob is the only additive term, rise is always 0.
-        double yawRad = Math.toRadians(owner.getYRot());
-        double bob = Math.sin(this.tickCount * (Mth.TWO_PI / XianSheHuanYingConstants.BOB_PERIOD_TICKS))
-                * XianSheHuanYingConstants.BOB_AMPLITUDE;
-        double[] centerOffset = XianSheHuanYingSnakePose.centerOffset(yawRad, bob, 0.0);
-        double centerX = owner.getX() + centerOffset[0];
-        double centerY = owner.getY() + centerOffset[1];
-        double centerZ = owner.getZ() + centerOffset[2];
-
-        // Pick a random point along the tail-fade pixel path, convert to the snake quad's own
-        // local (x, y) exactly as renderQuad's centered, unflipped UV mapping does (see
-        // XianSheHuanYingConstants.TAIL_PATH_PIXEL_X/Y's own javadoc), then jitter it.
-        int lastPoint = XianSheHuanYingConstants.TAIL_PATH_PIXEL_X.length - 1;
-        int segment = random.nextInt(lastPoint);
-        float t = random.nextFloat();
-        float pixelX = Mth.lerp(t, XianSheHuanYingConstants.TAIL_PATH_PIXEL_X[segment],
-                XianSheHuanYingConstants.TAIL_PATH_PIXEL_X[segment + 1]);
-        float pixelY = Mth.lerp(t, XianSheHuanYingConstants.TAIL_PATH_PIXEL_Y[segment],
-                XianSheHuanYingConstants.TAIL_PATH_PIXEL_Y[segment + 1]);
-        float localX = (pixelX / 256.0f - 0.5f) * XianSheHuanYingConstants.SNAKE_WIDTH
-                + (random.nextFloat() - 0.5f) * 2.0f * XianSheHuanYingConstants.TAIL_PARTICLE_JITTER;
-        float localY = (0.5f - pixelY / 256.0f) * XianSheHuanYingConstants.SNAKE_HEIGHT
-                + (random.nextFloat() - 0.5f) * 2.0f * XianSheHuanYingConstants.TAIL_PARTICLE_JITTER;
-
-        XianSheHuanYingTailParticleEmitter.spawnAtLocalOffset(this.level(), centerX, centerY, centerZ, localX, localY);
     }
 
     @Override
