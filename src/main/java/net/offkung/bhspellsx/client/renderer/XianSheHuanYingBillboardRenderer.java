@@ -12,6 +12,7 @@ import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
@@ -22,6 +23,7 @@ import net.offkung.bhspellsx.entity.spells.xian_she_huan_ying.XianSheHuanYingTar
 import net.offkung.bhspellsx.entity.spells.xian_she_huan_ying.XianSheHuanYingUserEntity;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
+import org.joml.Vector3f;
 
 import java.util.OptionalInt;
 import java.util.concurrent.ConcurrentHashMap;
@@ -60,7 +62,17 @@ public class XianSheHuanYingBillboardRenderer<T extends Entity> extends EntityRe
     private static final ResourceLocation SNAKE_TEXTURE = ResourceLocation.fromNamespaceAndPath(
             "bhspellsx", "textures/entity/xian_she_huan_ying/snake.png");
     private static final ResourceLocation EYE_TEXTURE = ResourceLocation.fromNamespaceAndPath(
-            "bhspellsx", "textures/entity/xian_she_huan_ying/snake_eye_placeholder.png");
+            "bhspellsx", "textures/entity/xian_she_huan_ying/snake_eye.png");
+
+    /** Purple tint for the weakening aura — see {@link #spawnAura}. */
+    private static final Vector3f AURA_COLOR = new Vector3f(
+            XianSheHuanYingConstants.AURA_COLOR_R, XianSheHuanYingConstants.AURA_COLOR_G,
+            XianSheHuanYingConstants.AURA_COLOR_B);
+
+    /** Last client tick a target-side entity (keyed by its own entity id) spawned an aura
+     *  particle, so {@link #spawnAura} — called from render(), which runs far more than 20
+     *  times/second — only actually spawns once per real game tick. */
+    private static final ConcurrentHashMap<Integer, Integer> lastAuraTick = new ConcurrentHashMap<>();
 
     private static final ResourceLocation CLOUD_A = ResourceLocation.fromNamespaceAndPath(
             "bhspellsx", "textures/entity/xian_she_huan_ying/cloud_a.png");
@@ -120,8 +132,9 @@ public class XianSheHuanYingBillboardRenderer<T extends Entity> extends EntityRe
         }
     }
 
-    /** Snake image behind the caster, plus the mist formation between the caster and the snake.
-     *  Both ease in from nothing on spawn — see {@link #appearFactor}. */
+    /** Snake image behind the caster, plus the single free-floating mist formation between the
+     *  caster and the snake (see {@link #renderMist}). Both ease in from nothing on spawn — see
+     *  {@link #appearFactor}. */
     private void renderUserSide(XianSheHuanYingUserEntity user, float partialTick, float age,
                                 PoseStack poseStack, MultiBufferSource buffer, int packedLight) {
         double ex = Mth.lerp(partialTick, user.xOld, user.getX());
@@ -171,12 +184,22 @@ public class XianSheHuanYingBillboardRenderer<T extends Entity> extends EntityRe
                 snakeOffX, snakeOffY + bob - snakeRise, snakeOffZ,
                 this.style.width() * snakeAppear, this.style.height() * snakeAppear);
 
-        renderMist(user, ownerOffX, ownerOffZ, snakeOffX, snakeOffZ, age, poseStack, buffer, packedLight);
+        renderMist(user, ownerOffX, ownerOffY, ownerOffZ, snakeOffX, snakeOffZ,
+                age, poseStack, buffer, packedLight);
     }
 
-    /** 6 clouds, cycling through 4 textures, centered between the caster and the snake image. See
-     *  the class javadoc and XianSheHuanYingConstants for the motion/appearance model. */
-    private void renderMist(XianSheHuanYingUserEntity user, double ownerOffX, double ownerOffZ,
+    /** 6 clouds, cycling through 4 textures, one free-floating group centered between the caster
+     *  and the snake image — reverted to round 3's single-group layout (round 4's snake-centered
+     *  + front-of-player split visibly swung the whole formation on every turn, since both parts
+     *  were tied to yaw; this group isn't). Horizontal center is the X/Z midpoint of the caster
+     *  and the snake image, exactly as round 3 had it. The Y-stutter fix: each cloud's "height"
+     *  (an absolute height above the caster's feet, 0.2-2.0 blocks, biased low) is now added onto
+     *  {@code ownerOffY} — the caster's own REAL interpolated Y offset (the same one the snake
+     *  image uses) — instead of round 3's bug of leaving it un-anchored, which left the mist's
+     *  vertical position implicitly relative to this entity's own 20 Hz tracked Y. That mismatch
+     *  (X/Z correctly interpolated, Y not) is exactly why the mist alone stuttered on a jump while
+     *  the snake didn't; re-check this spot first if the stutter ever reappears. */
+    private void renderMist(XianSheHuanYingUserEntity user, double ownerOffX, double ownerOffY, double ownerOffZ,
                             double snakeOffX, double snakeOffZ, float age,
                             PoseStack poseStack, MultiBufferSource buffer, int packedLight) {
         double centerX = (ownerOffX + snakeOffX) * 0.5;
@@ -208,7 +231,9 @@ public class XianSheHuanYingBillboardRenderer<T extends Entity> extends EntityRe
 
             double cx = centerX + Math.cos(angle) * radius + Math.cos(angle + Mth.HALF_PI) * drift;
             double cz = centerZ + Math.sin(angle) * radius + Math.sin(angle + Mth.HALF_PI) * drift;
-            double cy = height + Math.sin(driftPhaseAngle) * (XianSheHuanYingConstants.CLOUD_DRIFT_DISTANCE * 0.5);
+            // height is an absolute height above the caster's feet — anchored to the caster's own
+            // interpolated Y (ownerOffY), not this entity's tracked Y. See the method javadoc.
+            double cy = ownerOffY + height + Math.sin(driftPhaseAngle) * (XianSheHuanYingConstants.CLOUD_DRIFT_DISTANCE * 0.5);
 
             int texIndex = i % CLOUD_TEXTURES.length;
             float appear = appearFactor(age, i * (float) XianSheHuanYingConstants.CLOUD_APPEAR_STAGGER_TICKS);
@@ -222,6 +247,10 @@ public class XianSheHuanYingBillboardRenderer<T extends Entity> extends EntityRe
 
     /** Eye image above the target's head. No appear animation (round 3 only asks for it on the
      *  snake and mist), same gentle bob as before. */
+    /** Eye pair above the target's head (round 6: two mirrored copies of snake_eye.png, opening
+     *  on a delay after spawn — see {@link #renderEyePair}), plus the purple weakening aura
+     *  (see {@link #spawnAura}), both anchored the same way the old single eye quad was: the
+     *  target's own interpolated position if found client-side, else this entity's tracked one. */
     private void renderEyeSide(XianSheHuanYingTargetEntity marker, float partialTick, float age,
                                PoseStack poseStack, MultiBufferSource buffer, int packedLight) {
         double ex = Mth.lerp(partialTick, marker.xOld, marker.getX());
@@ -231,28 +260,94 @@ public class XianSheHuanYingBillboardRenderer<T extends Entity> extends EntityRe
         double dx = 0.0;
         double dz = 0.0;
         double dy = XianSheHuanYingConstants.EYE_CENTER_HEIGHT;
+        double targetX = ex;
+        double targetY = ey;
+        double targetZ = ez;
+        double targetHeight = 0.0;
 
         OptionalInt syncedId = marker.getSyncedTargetEntityId();
         Entity target = syncedId.isPresent() ? marker.level().getEntity(syncedId.getAsInt()) : null;
         if (target != null) {
-            double tx = Mth.lerp(partialTick, target.xOld, target.getX());
-            double ty = Mth.lerp(partialTick, target.yOld, target.getY());
-            double tz = Mth.lerp(partialTick, target.zOld, target.getZ());
-            dx = tx - ex;
-            dz = tz - ez;
-            dy = (ty - ey) + target.getBoundingBox().getYsize() + XianSheHuanYingConstants.EYE_HEIGHT_MARGIN;
+            targetX = Mth.lerp(partialTick, target.xOld, target.getX());
+            targetY = Mth.lerp(partialTick, target.yOld, target.getY());
+            targetZ = Mth.lerp(partialTick, target.zOld, target.getZ());
+            targetHeight = target.getBoundingBox().getYsize();
+            dx = targetX - ex;
+            dz = targetZ - ez;
+            dy = (targetY - ey) + targetHeight + XianSheHuanYingConstants.EYE_HEIGHT_MARGIN;
         }
 
         double bob = Math.sin(age * (Mth.TWO_PI / XianSheHuanYingConstants.BOB_PERIOD_TICKS))
                 * XianSheHuanYingConstants.BOB_AMPLITUDE;
-        renderQuad(poseStack, buffer, packedLight, this.style.texture(),
-                dx, dy + bob, dz, this.style.width(), this.style.height());
+
+        float openFactor = appearFactor(age, XianSheHuanYingConstants.EYE_OPEN_DELAY_TICKS,
+                XianSheHuanYingConstants.EYE_OPEN_TICKS);
+        renderEyePair(poseStack, buffer, packedLight, dx, dy + bob, dz, openFactor);
+
+        if (target != null) {
+            spawnAura(marker, targetX, targetY, targetZ, targetHeight);
+        }
+    }
+
+    /** Two copies of the same eye texture, side by side in the VIEWER's screen space (not world
+     *  space — see the localOffsetX parameter on {@link #renderQuad}), so the gap between them
+     *  reads as constant regardless of view angle. The right-hand copy (the source image is
+     *  already a right eye) is drawn as-is; the left is U-mirrored. Only height eases in with
+     *  {@code openFactor} — width stays fixed, per spec ("บีบความสูง ... ความกว้างคงที่") — and
+     *  it eases from the vertical center, i.e. the eye "opens" like an eyelid rather than
+     *  growing up from the bottom. See the class javadoc for why closing on dismiss isn't wired
+     *  up yet. */
+    private void renderEyePair(PoseStack poseStack, MultiBufferSource buffer, int packedLight,
+                               double dx, double dy, double dz, float openFactor) {
+        if (openFactor <= 0.0f) {
+            return;
+        }
+        float size = XianSheHuanYingConstants.EYE_PAIR_SIZE;
+        float height = size * openFactor;
+        float halfGap = XianSheHuanYingConstants.EYE_PAIR_GAP * 0.5f;
+        renderQuad(poseStack, buffer, packedLight, EYE_TEXTURE, dx, dy, dz, size, height, halfGap, false);
+        renderQuad(poseStack, buffer, packedLight, EYE_TEXTURE, dx, dy, dz, size, height, -halfGap, true);
+    }
+
+    /** Purple particles drifting down from the target's shoulders toward the ground, spawned
+     *  entirely client-side (plain {@code Level#addParticle}, no packet) using vanilla's
+     *  {@code DustParticleOptions} — see the class javadoc for why that type was chosen. Gated to
+     *  once per real client tick (not per frame) via {@link #lastAuraTick}, since {@code render()}
+     *  runs far more often than the game ticks. */
+    private void spawnAura(XianSheHuanYingTargetEntity marker, double targetX, double targetY, double targetZ,
+                           double targetHeight) {
+        int tick = marker.tickCount;
+        if (tick % XianSheHuanYingConstants.AURA_INTERVAL_TICKS != 0) {
+            return;
+        }
+        Integer last = lastAuraTick.get(marker.getId());
+        if (last != null && last == tick) {
+            return;
+        }
+        lastAuraTick.put(marker.getId(), tick);
+
+        RandomSource rnd = marker.level().random;
+        float angle = rnd.nextFloat() * Mth.TWO_PI;
+        float radius = Mth.lerp(rnd.nextFloat(), XianSheHuanYingConstants.AURA_RADIUS_MIN,
+                XianSheHuanYingConstants.AURA_RADIUS_MAX);
+        double px = targetX + Math.cos(angle) * radius;
+        double pz = targetZ + Math.sin(angle) * radius;
+        double py = targetY + targetHeight * XianSheHuanYingConstants.AURA_SPAWN_HEIGHT_FRACTION;
+
+        DustParticleOptions options = new DustParticleOptions(AURA_COLOR, XianSheHuanYingConstants.AURA_SCALE);
+        marker.level().addParticle(options, px, py, pz, 0.0, -XianSheHuanYingConstants.AURA_FALL_SPEED, 0.0);
     }
 
     /** Ease-out (quadratic) from 0 to 1 over APPEAR_TICKS, starting delayTicks after spawn.
      *  Purely a function of client tickCount+partialTick — never touches server lifecycle. */
     private static float appearFactor(float age, float delayTicks) {
-        float t = Mth.clamp((age - delayTicks) / XianSheHuanYingConstants.APPEAR_TICKS, 0.0f, 1.0f);
+        return appearFactor(age, delayTicks, XianSheHuanYingConstants.APPEAR_TICKS);
+    }
+
+    /** Same ease-out, with an explicit duration (used by the eye pair, whose open time differs
+     *  from the snake/mist's APPEAR_TICKS). */
+    private static float appearFactor(float age, float delayTicks, float durationTicks) {
+        float t = Mth.clamp((age - delayTicks) / durationTicks, 0.0f, 1.0f);
         return 1.0f - (1.0f - t) * (1.0f - t);
     }
 
@@ -263,6 +358,15 @@ public class XianSheHuanYingBillboardRenderer<T extends Entity> extends EntityRe
     private void renderQuad(PoseStack poseStack, MultiBufferSource buffer, int packedLight,
                             ResourceLocation texture, double dx, double dy, double dz,
                             float width, float height) {
+        renderQuad(poseStack, buffer, packedLight, texture, dx, dy, dz, width, height, 0.0f, false);
+    }
+
+    /** Same as the 9-arg overload, plus a localOffsetX (applied AFTER the camera-orientation pose,
+     *  i.e. in screen space — used to lay the two eyes side by side at a view-independent gap) and
+     *  a U-mirror flag (used for the left eye, since the source art is a single right eye). */
+    private void renderQuad(PoseStack poseStack, MultiBufferSource buffer, int packedLight,
+                            ResourceLocation texture, double dx, double dy, double dz,
+                            float width, float height, float localOffsetX, boolean mirrorU) {
         if (width <= 0.0f || height <= 0.0f) {
             return;
         }
@@ -271,6 +375,11 @@ public class XianSheHuanYingBillboardRenderer<T extends Entity> extends EntityRe
         // Full-axis billboard: adopt the camera's orientation, so the quad's local +X is screen
         // right, +Y is screen up and +Z points at the viewer (no mirroring, no roll).
         poseStack.mulPose(this.entityRenderDispatcher.cameraOrientation());
+        if (localOffsetX != 0.0f) {
+            // In screen space now (after cameraOrientation), so this offset stays a constant
+            // on-screen distance regardless of view angle/distance — unlike a world-space offset.
+            poseStack.translate(localOffsetX, 0.0, 0.0);
+        }
 
         PoseStack.Pose pose = poseStack.last();
         Matrix4f matrix = pose.pose();
@@ -279,10 +388,12 @@ public class XianSheHuanYingBillboardRenderer<T extends Entity> extends EntityRe
         int light = XianSheHuanYingConstants.RENDER_FULL_BRIGHT ? LightTexture.FULL_BRIGHT : packedLight;
         float hw = width * 0.5f;
         float hh = height * 0.5f;
-        vertex(consumer, matrix, normal, -hw, -hh, 0.0f, 1.0f, light);
-        vertex(consumer, matrix, normal, hw, -hh, 1.0f, 1.0f, light);
-        vertex(consumer, matrix, normal, hw, hh, 1.0f, 0.0f, light);
-        vertex(consumer, matrix, normal, -hw, hh, 0.0f, 0.0f, light);
+        float uLeft = mirrorU ? 1.0f : 0.0f;
+        float uRight = mirrorU ? 0.0f : 1.0f;
+        vertex(consumer, matrix, normal, -hw, -hh, uLeft, 1.0f, light);
+        vertex(consumer, matrix, normal, hw, -hh, uRight, 1.0f, light);
+        vertex(consumer, matrix, normal, hw, hh, uRight, 0.0f, light);
+        vertex(consumer, matrix, normal, -hw, hh, uLeft, 0.0f, light);
         poseStack.popPose();
     }
 
