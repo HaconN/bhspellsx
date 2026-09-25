@@ -123,19 +123,21 @@ public class XianSheHuanYingTargetEntity extends Entity {
         }
     }
 
-    /** Plays the "being watched" cue once, at the exact tick the eye-open animation begins
-     *  (EYE_OPEN_DELAY_TICKS) — reads the same entity.tickCount the renderer's eye-open easing
-     *  does, so the timing matches exactly. All of the actual client-type work (finding the local
-     *  player, matching it against the target, resolving/playing the sound) lives in
-     *  {@link XianSheHuanYingEyeSound}, a client-only class — this method and this whole class
-     *  never reference {@code net.minecraft.client.*} directly; see that class's javadoc for why
-     *  that separation matters even inside an {@code isClientSide()} branch. Does not touch
-     *  lifecycle, tag, or Slowness in any way. */
+    /** Plays the "being watched" cue once, at the exact tick the FULL open-ease begins — i.e.
+     *  after the round-15 squint-and-hold phase finishes, not at EYE_OPEN_DELAY_TICKS anymore
+     *  ("เสียงลืมตาต้องย้ายไปดังตอนเริ่มเบิก (หลังหรี่จบ)"). Reads
+     *  {@code EYE_OPEN_EASE_START_TICK}, the same derived constant the renderer's
+     *  {@code openFactorFor} uses for that phase transition, so the two can't drift apart. All of
+     *  the actual client-type work (finding the local player, matching it against the target,
+     *  resolving/playing the sound) lives in {@link XianSheHuanYingEyeSound}, a client-only class
+     *  — this method and this whole class never reference {@code net.minecraft.client.*}
+     *  directly; see that class's javadoc for why that separation matters even inside an
+     *  {@code isClientSide()} branch. Does not touch lifecycle, tag, or Slowness in any way. */
     private void tickClientEyeSound() {
         if (this.eyeSoundPlayed || this.isRemoved() || this.isDismissing()) {
             return;
         }
-        if (this.tickCount != XianSheHuanYingConstants.EYE_OPEN_DELAY_TICKS) {
+        if (this.tickCount != XianSheHuanYingConstants.EYE_OPEN_EASE_START_TICK) {
             return;
         }
         OptionalInt syncedId = this.getSyncedTargetEntityId();

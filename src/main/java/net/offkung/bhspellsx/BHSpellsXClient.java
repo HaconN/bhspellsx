@@ -9,6 +9,7 @@ import net.minecraftforge.fml.common.Mod;
 import net.offkung.bhspellsx.client.particle.AmethystShardParticle;
 import net.offkung.bhspellsx.client.particle.EmbraceLeafParticle;
 import net.offkung.bhspellsx.client.particle.EmbraceMoteParticle;
+import net.offkung.bhspellsx.client.particle.XshySmokeParticle;
 import net.offkung.bhspellsx.client.renderer.AmethystDecreeCasterRingRenderer;
 import net.offkung.bhspellsx.client.renderer.AmethystDecreeTargetCrystalRenderer;
 import net.offkung.bhspellsx.client.renderer.CrystalHydroDomeRenderer;
@@ -55,5 +56,8 @@ public class BHSpellsXClient {
         event.registerSpriteSet(BHXParticleRegistry.EMBRACE_LEAF.get(), EmbraceLeafParticle.Provider::new);
         event.registerSpriteSet(BHXParticleRegistry.EMBRACE_MOTE.get(), EmbraceMoteParticle.Provider::new);
         event.registerSpriteSet(BHXParticleRegistry.AMETHYST_SHARD.get(), AmethystShardParticle.Provider::new);
+        // No SpriteSet/atlas involvement (round 15.5) — this particle binds and draws its own
+        // texture directly, see XshySmokeParticle's javadoc.
+        event.registerSpecial(BHXParticleRegistry.XSHY_SMOKE.get(), new XshySmokeParticle.Provider());
     }
 }

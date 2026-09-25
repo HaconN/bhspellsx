@@ -2,6 +2,7 @@ package net.offkung.bhspellsx.registry;
 
 import com.mojang.serialization.Codec;
 import net.minecraft.core.particles.ParticleType;
+import net.minecraft.core.particles.SimpleParticleType;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
@@ -37,6 +38,11 @@ public class BHXParticleRegistry {
                     return AmethystShardParticleOption.CODEC;
                 }
             });
+
+    /** Round 15: Xian She Huan Ying's caster-side smoke. Fixed color (no runtime tint), so a
+     *  plain SimpleParticleType is enough — no custom ParticleOptions/Codec needed. */
+    public static final RegistryObject<SimpleParticleType> XSHY_SMOKE =
+            PARTICLE_TYPES.register("xshy_smoke", () -> new SimpleParticleType(false));
 
     public static void register(IEventBus eventBus) {
         PARTICLE_TYPES.register(eventBus);

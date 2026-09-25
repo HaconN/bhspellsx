@@ -30,6 +30,19 @@ public final class XianSheHuanYingConstants {
     public static final int SLOW_REFRESH_INTERVAL_TICKS = 10;
     public static final int SLOW_AMPLIFIER = 0;
 
+    /** Darkness applied to the target alongside Slowness, same refresh cadence
+     *  (SLOW_REFRESH_INTERVAL_TICKS), same never-removed-on-end rule. Independent of the Slowness
+     *  values above; set DARKNESS_ENABLED to false to switch it off.
+     *  Decompiled (MobEffects.DARKNESS / MobEffectInstance.FactorData): Darkness carries FactorData
+     *  with a 22-tick padding — whenever the remaining duration is &lt;= 22 the screen factor starts
+     *  fading back to 0 (brightens), and it only fades in again once refreshed above 22. So the
+     *  duration must stay &gt; 22 even at the lowest point between refreshes:
+     *  DARKNESS_DURATION_TICKS - (SLOW_REFRESH_INTERVAL_TICKS - 1) = 31 with the current values, i.e.
+     *  no flicker. Keep that difference above 22 if either value is ever changed. */
+    public static final boolean DARKNESS_ENABLED = true;
+    public static final int DARKNESS_DURATION_TICKS = 40;
+    public static final int DARKNESS_AMPLIFIER = 0;
+
     /** Faint soul-smoke around the caster, kept as a light accompaniment to the billboard. */
     public static final int SOUL_INTERVAL_TICKS = 8;
     public static final int SOUL_PARTICLE_COUNT = 1;
@@ -62,6 +75,21 @@ public final class XianSheHuanYingConstants {
     public static final float EYE_OPEN_OVERSHOOT = 1.7f;
     /** "Closing" ease on dismiss (plain ease-in, no overshoot). */
     public static final int EYE_CLOSE_TICKS = 8;
+
+    /** Round 15: before the full open, the eyes rise to a thin squint line and hold there
+     *  ("ตาหรี่ก่อนเบิก"). Squint rise starts at EYE_OPEN_DELAY_TICKS, going 0 -> EYE_SQUINT_FRACTION
+     *  over this many ticks (spec gave "2-3 tick"; picked the upper bound). */
+    public static final int EYE_SQUINT_RISE_TICKS = 3;
+    /** How long the squint holds at EYE_SQUINT_FRACTION once the rise finishes, before the full
+     *  ease-out-back open (EYE_OPEN_TICKS) begins. */
+    public static final int EYE_SQUINT_TICKS = 10;
+    /** Squint height as a fraction of EYE_PAIR_SIZE. */
+    public static final float EYE_SQUINT_FRACTION = 0.1f;
+    /** Derived: the tick (entity.tickCount) the full ease-out-back open begins at — squint hold
+     *  ends here. Single source of truth for the renderer's openFactorFor AND
+     *  XianSheHuanYingTargetEntity's eye-open sound timing, so they can't drift apart. */
+    public static final int EYE_OPEN_EASE_START_TICK =
+            EYE_OPEN_DELAY_TICKS + EYE_SQUINT_RISE_TICKS + EYE_SQUINT_TICKS;
 
     // ---- "Being watched" sound cue, heard by the target only, once per lock. Unaffected by round
     // 12 — the caster never gets a sound cue for its own eyes. ------------------------------------
@@ -111,4 +139,78 @@ public final class XianSheHuanYingConstants {
     /** false = nearest filtering (pixel-sharp, current look). true = linear filtering (blurred).
      *  Toggle to compare in-game; never additive/translucent — still opaque cutout either way. */
     public static final boolean TEXTURE_SMOOTH = false;
+
+    // ---- Smoke: real particles (round 15), spawned around the CASTER's feet, left behind in the
+    // world rather than following the caster. See client.XianSheHuanYingSmokeEmitter (spawn side)
+    // and client.particle.XshySmokeParticle (per-particle behavior).
+
+    /** Fixed tint, 0-255 per channel (per spec: RGB 190,188,194 — not tunable per-spawn, baked
+     *  into the particle itself). */
+    public static final int SMOKE_COLOR_R = 38;
+    public static final int SMOKE_COLOR_G = 47;
+    public static final int SMOKE_COLOR_B = 110;
+
+    /** Base lifetime, seconds — actual is this * random(0.8, 1.2) per particle. */
+    public static final float SMOKE_LIFE_SECONDS = 4.5f;
+    /** Alpha peak (sin curve over the particle's life: 0 -> ALPHA -> 0). */
+    public static final float SMOKE_ALPHA = 0.45f;
+    /** Base quad size, blocks (full puff width) — actual start size is this * random(0.7, 1.3). */
+    public static final float SMOKE_SIZE = 2.4f;
+    /** Growth over the particle's life: size *= (1 + SMOKE_GROW * ageFraction). */
+    public static final float SMOKE_GROW = 0.45f;
+    /** Base rise speed, blocks/SECOND (converted to blocks/tick in XshySmokeParticle, /20) —
+     *  actual is this * random(0.6, 1.4). */
+    public static final float SMOKE_RISE = 0.08f;
+    /** Base sideways drift speed, blocks/SECOND (converted to blocks/tick, /20), in a random
+     *  horizontal direction — actual is this * random(0, 1). */
+    public static final float SMOKE_DRIFT = 0.18f;
+    /** Base spin speed, radians/SECOND (converted to radians/tick, /20) — actual is this *
+     *  (random direction +/-1) * random(0.5, 1.5). */
+    public static final float SMOKE_SPIN = 0.15f;
+    /** Spawn rate, particles/second (converted to a per-tick fractional accumulator by the
+     *  emitter — never rounded away). */
+    public static final float SMOKE_RATE = 20.0f;
+    /** Spawn area: a square [-R, R] on both x and z, rejecting (never resampling) any roll that
+     *  falls outside the inscribed circle of this radius. */
+    public static final float SMOKE_RADIUS = 2.4f;
+    /** Spawn height above the caster's feet: y = 0.1 + random(0, SMOKE_HEIGHT). */
+    public static final float SMOKE_HEIGHT = 1.7f;
+    /** Round 15.6 ("ปล่อยควันแบบระเบิดควัน"): how strongly spawn positions are pulled toward the
+     *  center of the spawn circle — k = (d/R)^SMOKE_CLUMP applied to the rolled (x,z), so 1.0 would
+     *  leave positions uniform and values below 1 bias them inward, denser near the feet. See
+     *  XianSheHuanYingSmokeEmitter. */
+    public static final float SMOKE_CLUMP = 0.6f;
+    /** Fraction of SMOKE_SIZE*0.5 used as the spawn height floor (minY), so puffs never spawn
+     *  low enough to visually sink into the ground. See XianSheHuanYingSmokeEmitter. */
+    public static final float SMOKE_LIFT = 0.7f;
+    /** How many puffs spawn all at once, the very first client tick the emitter runs for a given
+     *  entity ("ปุ้งตอนเริ่ม") — once only, never repeated. See XianSheHuanYingSmokeEmitter. */
+    public static final int SMOKE_BURST = 25;
+
+    // ---- Extra vanilla-particle VFX layered on top of the main smoke (A/B comparison build
+    // switch). Emitted by client.XianSheHuanYingSmokeEmitter, all client-side, level.addParticle.
+
+    /** 1 = A only (mist: cloud + white_ash, while the skill is on), 2 = B only (one-time white
+     *  end_rod flash burst), 3 = A + B. Bit 0 enables A, bit 1 enables B. */
+    public static final int XSHY_EXTRA_VFX_MODE = 3;
+
+    /** A1 — minecraft:cloud puffs: particles/second, y = 0.2 + random(0, MIST_CLOUD_HEIGHT) above
+     *  the feet, each velocity axis random in +/- MIST_CLOUD_VELOCITY (blocks/tick). */
+    public static final float XSHY_MIST_CLOUD_RATE = 4.0f;
+    public static final float XSHY_MIST_CLOUD_HEIGHT = 1.2f;
+    public static final float XSHY_MIST_CLOUD_VELOCITY = 0.01f;
+    /** A2 — minecraft:white_ash flakes: particles/second, y = 0.2 + random(0, SMOKE_HEIGHT). Passed
+     *  velocity is 0 (white_ash's constructor adds the passed velocity on top of its own drift). */
+    public static final float XSHY_MIST_ASH_RATE = 15.0f;
+    /** Height floor above the feet shared by both mist particles. */
+    public static final float XSHY_MIST_MIN_Y = 0.2f;
+
+    /** B — one-time burst fired together with the main smoke burst. Registry id, resolved once via
+     *  the particle-type registry (must be a plain SimpleParticleType). */
+    public static final String XSHY_FLASH_PARTICLE = "minecraft:end_rod";
+    public static final int XSHY_FLASH_COUNT = 30;
+    /** Spawn height above the feet. */
+    public static final float XSHY_FLASH_HEIGHT = 1.0f;
+    /** Base speed in blocks/tick, random direction over the full sphere, scaled by random(0.5, 1.0). */
+    public static final float XSHY_FLASH_SPEED = 0.15f;
 }

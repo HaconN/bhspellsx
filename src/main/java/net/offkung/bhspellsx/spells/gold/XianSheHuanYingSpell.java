@@ -81,7 +81,13 @@ public class XianSheHuanYingSpell extends AbstractSpell {
         super.onCast(level, spellLevel, entity, castSource, playerMagicData);
     }
 
-    private static void lockTarget(ServerLevel level, LivingEntity caster) {
+    /** Extra-VFX mode handed to the spawned {@link XianSheHuanYingUserEntity}. The real spell always
+     *  uses the constant; the temporary XSHY_TEST_ONLY subclass overrides it. */
+    protected int getExtraVfxMode() {
+        return XianSheHuanYingConstants.XSHY_EXTRA_VFX_MODE;
+    }
+
+    private void lockTarget(ServerLevel level, LivingEntity caster) {
         // Activating again while a lock exists: the old one dies first.
         UUID casterId = caster.getUUID();
         for (XianSheHuanYingUserEntity old : level.getEntities(
@@ -100,7 +106,7 @@ public class XianSheHuanYingSpell extends AbstractSpell {
             return;
         }
 
-        XianSheHuanYingUserEntity user = new XianSheHuanYingUserEntity(level, caster, target);
+        XianSheHuanYingUserEntity user = new XianSheHuanYingUserEntity(level, caster, target, getExtraVfxMode());
         XianSheHuanYingTargetEntity marker = new XianSheHuanYingTargetEntity(level, target, user.getUUID());
         user.setTargetEntityId(marker.getUUID());
         level.addFreshEntity(user);

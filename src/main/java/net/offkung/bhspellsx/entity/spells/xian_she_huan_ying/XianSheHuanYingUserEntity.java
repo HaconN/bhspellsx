@@ -14,6 +14,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.Level;
+import net.offkung.bhspellsx.client.XianSheHuanYingSmokeEmitter;
 import net.offkung.bhspellsx.registry.BHXEntityRegistry;
 
 import java.util.Optional;
@@ -69,9 +70,25 @@ public class XianSheHuanYingUserEntity extends Entity {
     private static final EntityDataAccessor<Integer> DATA_DISMISS_START_TICK =
             SynchedEntityData.defineId(XianSheHuanYingUserEntity.class, EntityDataSerializers.INT);
 
+    /** Extra-VFX mode (1 = A, 2 = B, 3 = A+B, see XianSheHuanYingConstants#XSHY_EXTRA_VFX_MODE), synced
+     *  so the client-side emitter reads it from the entity instead of the constant directly. The
+     *  real spell passes the constant; the temporary test spells pass their own. */
+    private static final EntityDataAccessor<Integer> DATA_EXTRA_VFX_MODE =
+            SynchedEntityData.defineId(XianSheHuanYingUserEntity.class, EntityDataSerializers.INT);
+
     private UUID ownerId;
     private UUID targetId;
     private UUID targetEntityId;
+    /** Client-side only, not synced: fractional remainder of SMOKE_RATE/20 particles-per-tick, so
+     *  the 24/sec spawn rate isn't rounded away — see {@link #tickClientSmoke}. */
+    private float smokeAccumulator;
+    /** Client-side only, not synced: true once the one-time spawn burst has fired for this entity
+     *  ("ปุ้งตอนเริ่ม") — see {@link #tickClientSmoke}. */
+    private boolean smokeBurstSpawned;
+    /** Client-side only: fractional remainders for the two extra mist particles (A1 cloud, A2
+     *  white_ash), kept separate so each rate is honored independently. */
+    private float mistCloudAccumulator;
+    private float mistAshAccumulator;
 
     public XianSheHuanYingUserEntity(EntityType<?> entityType, Level level) {
         super(entityType, level);
@@ -79,8 +96,9 @@ public class XianSheHuanYingUserEntity extends Entity {
         this.setNoGravity(true);
     }
 
-    public XianSheHuanYingUserEntity(Level level, LivingEntity owner, LivingEntity target) {
+    public XianSheHuanYingUserEntity(Level level, LivingEntity owner, LivingEntity target, int extraVfxMode) {
         this(BHXEntityRegistry.XIAN_SHE_HUAN_YING_USER.get(), level);
+        this.entityData.set(DATA_EXTRA_VFX_MODE, extraVfxMode);
         this.ownerId = owner.getUUID();
         this.entityData.set(DATA_OWNER_UUID, Optional.of(owner.getUUID()));
         this.targetId = target.getUUID();
@@ -94,6 +112,11 @@ public class XianSheHuanYingUserEntity extends Entity {
     /** Client-side accessor for the synced caster UUID (null until synced). */
     public UUID getSyncedOwnerId() {
         return this.entityData.get(DATA_OWNER_UUID).orElse(null);
+    }
+
+    /** Client-side accessor for the synced extra-VFX mode bitmask (bit0 = A, bit1 = B). */
+    public int getExtraVfxMode() {
+        return this.entityData.get(DATA_EXTRA_VFX_MODE);
     }
 
     public boolean isDismissing() {
@@ -112,7 +135,11 @@ public class XianSheHuanYingUserEntity extends Entity {
     @Override
     public void tick() {
         super.tick();
-        if (this.level().isClientSide() || this.isRemoved()) {
+        if (this.level().isClientSide()) {
+            tickClientSmoke();
+            return;
+        }
+        if (this.isRemoved()) {
             return;
         }
         if (!(this.level() instanceof ServerLevel serverLevel)) {
@@ -174,11 +201,74 @@ public class XianSheHuanYingUserEntity extends Entity {
             target.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN,
                     XianSheHuanYingConstants.SLOW_DURATION_TICKS, XianSheHuanYingConstants.SLOW_AMPLIFIER,
                     false, false, true));
+            if (XianSheHuanYingConstants.DARKNESS_ENABLED) {
+                // Same rules as Slowness above: plain addEffect, no particles, never removed on
+                // end/dismiss — it expires on its own. Duration must stay > 22 between refreshes to
+                // avoid a brightness flicker; see DARKNESS_DURATION_TICKS.
+                target.addEffect(new MobEffectInstance(MobEffects.DARKNESS,
+                        XianSheHuanYingConstants.DARKNESS_DURATION_TICKS, XianSheHuanYingConstants.DARKNESS_AMPLIFIER,
+                        false, false, true));
+            }
         }
         if (this.tickCount % XianSheHuanYingConstants.SOUL_INTERVAL_TICKS == 0) {
             // Faint soul smoke around the caster; the billboard is the main visual.
             serverLevel.sendParticles(ParticleTypes.SOUL, ownerLiving.getX(), ownerLiving.getY() + 1.0,
                     ownerLiving.getZ(), XianSheHuanYingConstants.SOUL_PARTICLE_COUNT, 0.5, 0.7, 0.5, 0.01);
+        }
+    }
+
+    /** Round 15: client-side only, spawns the caster's smoke particles left behind in the world
+     *  (not attached to the caster, per spec — each particle is positioned once, at spawn, from
+     *  wherever the owner is that tick, then never moved to follow). Stops the instant dismissing
+     *  starts ("หยุดปล่อยตอน dismissing"); particles already spawned just fade out on their own
+     *  since XshySmokeParticle doesn't reference this entity at all. Does not touch lifecycle, tag,
+     *  Slowness, buffs, or the purple aura in any way — this only adds a new client-only branch,
+     *  the server-side lifecycle above is unchanged. All of the actual spawning lives in
+     *  {@link XianSheHuanYingSmokeEmitter}, per the same client-type-isolation convention
+     *  {@link XianSheHuanYingTargetEntity}'s eye-sound cue already uses. */
+    private void tickClientSmoke() {
+        if (this.isRemoved() || this.isDismissing()) {
+            return;
+        }
+        UUID syncedOwnerId = this.getSyncedOwnerId();
+        if (syncedOwnerId == null) {
+            return;
+        }
+        Entity owner = this.level().getPlayerByUUID(syncedOwnerId);
+        if (owner == null) {
+            return;
+        }
+        if (!this.smokeBurstSpawned) {
+            // "ปุ้งตอนเริ่ม" — the first client tick the emitter actually runs for this entity
+            // (i.e. the first tick the owner resolves), not tickCount==0, since the owner may not
+            // resolve immediately. Fires once only; normal per-tick spawning below is unaffected.
+            this.smokeBurstSpawned = true;
+            XianSheHuanYingSmokeEmitter.spawnBurst(this.level(), owner.getX(), owner.getY(), owner.getZ(),
+                    this.level().getRandom());
+            if ((this.getExtraVfxMode() & 2) != 0) {
+                XianSheHuanYingSmokeEmitter.spawnFlashBurst(this.level(), owner.getX(), owner.getY(), owner.getZ(),
+                        this.level().getRandom());
+            }
+        }
+        if ((this.getExtraVfxMode() & 1) != 0) {
+            this.mistCloudAccumulator += XianSheHuanYingConstants.XSHY_MIST_CLOUD_RATE / 20.0f;
+            while (this.mistCloudAccumulator >= 1.0f) {
+                this.mistCloudAccumulator -= 1.0f;
+                XianSheHuanYingSmokeEmitter.spawnMistCloud(this.level(), owner.getX(), owner.getY(), owner.getZ(),
+                        this.level().getRandom());
+            }
+            this.mistAshAccumulator += XianSheHuanYingConstants.XSHY_MIST_ASH_RATE / 20.0f;
+            while (this.mistAshAccumulator >= 1.0f) {
+                this.mistAshAccumulator -= 1.0f;
+                XianSheHuanYingSmokeEmitter.spawnMistAsh(this.level(), owner.getX(), owner.getY(), owner.getZ(),
+                        this.level().getRandom());
+            }
+        }
+        this.smokeAccumulator += XianSheHuanYingConstants.SMOKE_RATE / 20.0f;
+        while (this.smokeAccumulator >= 1.0f) {
+            this.smokeAccumulator -= 1.0f;
+            XianSheHuanYingSmokeEmitter.trySpawn(this.level(), owner.getX(), owner.getY(), owner.getZ(),
+                    this.level().getRandom());
         }
     }
 
@@ -256,6 +346,7 @@ public class XianSheHuanYingUserEntity extends Entity {
         this.entityData.define(DATA_OWNER_UUID, Optional.empty());
         this.entityData.define(DATA_DISMISSING, false);
         this.entityData.define(DATA_DISMISS_START_TICK, 0);
+        this.entityData.define(DATA_EXTRA_VFX_MODE, XianSheHuanYingConstants.XSHY_EXTRA_VFX_MODE);
     }
 
     @Override

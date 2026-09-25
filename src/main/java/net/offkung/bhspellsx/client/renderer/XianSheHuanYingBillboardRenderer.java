@@ -86,8 +86,12 @@ public class XianSheHuanYingBillboardRenderer<T extends Entity> extends EntityRe
             // resolve it), not some separate target.
             UUID ownerId = user.getSyncedOwnerId();
             Entity owner = ownerId != null ? user.level().getPlayerByUUID(ownerId) : null;
+            boolean dismissing = user.isDismissing();
+            int dismissStartTick = user.getDismissStartTick();
             renderEyePairAndAura(poseStack, buffer, packedLight, user, partialTick, age,
-                    owner, user.isDismissing(), user.getDismissStartTick(), false);
+                    owner, dismissing, dismissStartTick, false);
+            // Smoke is a real particle now (round 15), spawned client-side from
+            // XianSheHuanYingUserEntity's own tick — nothing to draw here.
         } else if (entity instanceof XianSheHuanYingTargetEntity marker) {
             OptionalInt syncedId = marker.getSyncedTargetEntityId();
             Entity target = syncedId.isPresent() ? marker.level().getEntity(syncedId.getAsInt()) : null;
@@ -106,9 +110,10 @@ public class XianSheHuanYingBillboardRenderer<T extends Entity> extends EntityRe
     private void renderEyePairAndAura(PoseStack poseStack, MultiBufferSource buffer, int packedLight,
                                       Entity anchor, float partialTick, float age, Entity subject,
                                       boolean dismissing, int dismissStartTick, boolean withAura) {
-        double ex = Mth.lerp(partialTick, anchor.xOld, anchor.getX());
-        double ey = Mth.lerp(partialTick, anchor.yOld, anchor.getY());
-        double ez = Mth.lerp(partialTick, anchor.zOld, anchor.getZ());
+        double[] anchorPos = interpolated(anchor, partialTick);
+        double ex = anchorPos[0];
+        double ey = anchorPos[1];
+        double ez = anchorPos[2];
 
         double dx = 0.0;
         double dz = 0.0;
@@ -119,9 +124,10 @@ public class XianSheHuanYingBillboardRenderer<T extends Entity> extends EntityRe
         double subjectHeight = 0.0;
 
         if (subject != null) {
-            subjectX = Mth.lerp(partialTick, subject.xOld, subject.getX());
-            subjectY = Mth.lerp(partialTick, subject.yOld, subject.getY());
-            subjectZ = Mth.lerp(partialTick, subject.zOld, subject.getZ());
+            double[] subjectPos = interpolated(subject, partialTick);
+            subjectX = subjectPos[0];
+            subjectY = subjectPos[1];
+            subjectZ = subjectPos[2];
             subjectHeight = subject.getBoundingBox().getYsize();
             dx = subjectX - ex;
             dz = subjectZ - ez;
@@ -131,10 +137,7 @@ public class XianSheHuanYingBillboardRenderer<T extends Entity> extends EntityRe
         double bob = Math.sin(age * (Mth.TWO_PI / XianSheHuanYingConstants.BOB_PERIOD_TICKS))
                 * XianSheHuanYingConstants.BOB_AMPLITUDE;
 
-        float openFactor = dismissing
-                ? closeFactor(dismissStartTick, age, XianSheHuanYingConstants.EYE_CLOSE_TICKS)
-                : easeOutBackFactor(age, XianSheHuanYingConstants.EYE_OPEN_DELAY_TICKS,
-                        XianSheHuanYingConstants.EYE_OPEN_TICKS, XianSheHuanYingConstants.EYE_OPEN_OVERSHOOT);
+        float openFactor = openFactorFor(dismissing, dismissStartTick, age);
         renderEyePair(poseStack, buffer, packedLight, dx, dy + bob, dz, openFactor);
 
         if (withAura && subject != null) {
@@ -267,6 +270,50 @@ public class XianSheHuanYingBillboardRenderer<T extends Entity> extends EntityRe
         return 1.0f - t * t;
     }
 
+    /** Picks the opening curve (spawning) or {@link #closeFactor} (dismissing) for the eye pair.
+     *  Dismiss/close is untouched. Opening (round 15) is now 3 phases, all in the same
+     *  entity.tickCount space XianSheHuanYingTargetEntity's sound-timing check reads:
+     *  <ol>
+     *  <li>0 until EYE_OPEN_DELAY_TICKS ("ก่อนลืมตาพรึบ"),</li>
+     *  <li>a linear rise 0 -> EYE_SQUINT_FRACTION over EYE_SQUINT_RISE_TICKS ("ตาโผล่เป็นเส้นหรี่"),</li>
+     *  <li>a hold at EYE_SQUINT_FRACTION for EYE_SQUINT_TICKS ("ค้างไว้"),</li>
+     *  <li>then {@link #easeOutBackFactor}, reparametrized from its native [0,1] output range to
+     *  [EYE_SQUINT_FRACTION, 1.0] (raw==0 lands exactly on the squint height it's continuing from,
+     *  raw==1 lands exactly on fully open) — this is "เบิกด้วย easeOutBack เดิม จาก SQUINT -> 1.0".
+     *  </ol> */
+    private static float openFactorFor(boolean dismissing, int dismissStartTick, float age) {
+        if (dismissing) {
+            return closeFactor(dismissStartTick, age, XianSheHuanYingConstants.EYE_CLOSE_TICKS);
+        }
+        float squintStart = XianSheHuanYingConstants.EYE_OPEN_DELAY_TICKS;
+        float squintRiseEnd = squintStart + XianSheHuanYingConstants.EYE_SQUINT_RISE_TICKS;
+        float squint = XianSheHuanYingConstants.EYE_SQUINT_FRACTION;
+        if (age <= squintStart) {
+            return 0.0f;
+        }
+        if (age < squintRiseEnd) {
+            return Mth.lerp((age - squintStart) / XianSheHuanYingConstants.EYE_SQUINT_RISE_TICKS, 0.0f, squint);
+        }
+        if (age < XianSheHuanYingConstants.EYE_OPEN_EASE_START_TICK) {
+            return squint;
+        }
+        float raw = easeOutBackFactor(age, XianSheHuanYingConstants.EYE_OPEN_EASE_START_TICK,
+                XianSheHuanYingConstants.EYE_OPEN_TICKS, XianSheHuanYingConstants.EYE_OPEN_OVERSHOOT);
+        return squint + (1.0f - squint) * raw;
+    }
+
+    /** Interpolated (x, y, z) of any entity with partialTick — the exact same
+     *  {@code Mth.lerp(partialTick, eOld, e.get())} formula the eye code already used for both
+     *  the anchor and the subject, now shared so the smoke center uses it too instead of a new
+     *  copy of the formula. */
+    private static double[] interpolated(Entity e, float partialTick) {
+        return new double[]{
+                Mth.lerp(partialTick, e.xOld, e.getX()),
+                Mth.lerp(partialTick, e.yOld, e.getY()),
+                Mth.lerp(partialTick, e.zOld, e.getZ())
+        };
+    }
+
     /** Draws one full-axis billboard quad, offset (dx, dy, dz) from the entity's own render
      *  origin (as MC's EntityRenderDispatcher already translated the PoseStack there). A
      *  collapsed (0-size) quad — mid-appear-animation — is skipped rather than drawn as a
@@ -381,4 +428,5 @@ public class XianSheHuanYingBillboardRenderer<T extends Entity> extends EntityRe
                     DefaultVertexFormat.NEW_ENTITY, VertexFormat.Mode.QUADS, 256, false, false, state);
         }
     }
+
 }
