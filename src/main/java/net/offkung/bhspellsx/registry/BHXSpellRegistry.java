@@ -7,7 +7,6 @@ import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.RegistryObject;
 import net.offkung.bhspellsx.spells.gold.AmethystDecreeSpell;
 import net.offkung.bhspellsx.spells.gold.XianSheHuanYingSpell;
-import net.offkung.bhspellsx.spells.gold.XianSheHuanYingTestSpell; // XSHY_TEST_ONLY — ลบก่อนส่ง
 import net.offkung.bhspellsx.spells.ground.EmbracingBosomSpell;
 import net.offkung.bhspellsx.spells.water.CrystalHydroDomeSpell;
 
@@ -31,16 +30,6 @@ public class BHXSpellRegistry {
 
     public static final RegistryObject<AbstractSpell> XIAN_SHE_HUAN_YING =
             registerSpell(new XianSheHuanYingSpell());
-
-    // XSHY_TEST_ONLY — ลบก่อนส่ง (3 test spells: same class as the real spell, different extra-VFX mode)
-    public static final RegistryObject<AbstractSpell> XSHY_TEST_A =
-            registerSpell(new XianSheHuanYingTestSpell("xshy_test_a", 1));
-    // XSHY_TEST_ONLY — ลบก่อนส่ง
-    public static final RegistryObject<AbstractSpell> XSHY_TEST_B =
-            registerSpell(new XianSheHuanYingTestSpell("xshy_test_b", 2));
-    // XSHY_TEST_ONLY — ลบก่อนส่ง
-    public static final RegistryObject<AbstractSpell> XSHY_TEST_AB =
-            registerSpell(new XianSheHuanYingTestSpell("xshy_test_ab", 3));
 
     private static RegistryObject<AbstractSpell> registerSpell(AbstractSpell spell) {
         return SPELLS.register(spell.getSpellName(), () -> spell);

@@ -11,13 +11,6 @@
 
   "spell.bhspellsx.xian_she_huan_ying": "Xian She Huan Ying",
   "spell.bhspellsx.xian_she_huan_ying.guide": "Toggle to lock onto the target you are looking at. While locked they are slowed and you are empowered; it ends when you toggle it off, run out of mana, either of you dies, or you change dimension.",
-  "_comment_XSHY_TEST_ONLY": "XSHY_TEST_ONLY — ลบก่อนส่ง: the 6 xshy_test_* keys below are for the temporary extra-VFX test spells",
-  "spell.bhspellsx.xshy_test_a": "[TEST] Xian She Huan Ying - A (mist)",
-  "spell.bhspellsx.xshy_test_a.guide": "XSHY_TEST_ONLY: real spell + extra VFX A only (cloud + white_ash mist).",
-  "spell.bhspellsx.xshy_test_b": "[TEST] Xian She Huan Ying - B (flash)",
-  "spell.bhspellsx.xshy_test_b.guide": "XSHY_TEST_ONLY: real spell + extra VFX B only (one-time end_rod flash burst).",
-  "spell.bhspellsx.xshy_test_ab": "[TEST] Xian She Huan Ying - A+B",
-  "spell.bhspellsx.xshy_test_ab.guide": "XSHY_TEST_ONLY: real spell + extra VFX A and B.",
   "ui.bhspellsx.xian_she_huan_ying_no_target": "ไม่พบเป้าหมาย",
   "ui.bhspellsx.xian_she_huan_ying_locked": "ล็อคเป้า %s แล้ว",
   "ui.bhspellsx.xian_she_huan_ying_cancel": "ยกเลิกล็อคเป้า",
