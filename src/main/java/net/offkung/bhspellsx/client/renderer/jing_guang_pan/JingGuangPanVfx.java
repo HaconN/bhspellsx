@@ -25,7 +25,7 @@ public final class JingGuangPanVfx {
         double confirmed, previous, distance;
         int age, fade, previousFade;
         boolean done;
-        Visual(BHXNetwork.WavePath packet) { source=packet; shape=new JingGuangPanWaveShape(packet.direction(),packet.yaw(),packet.left()); }
+        Visual(BHXNetwork.WavePath packet) { source=packet; shape=new JingGuangPanWaveShape(packet.direction(),packet.yaw(),packet.rollDegrees()); }
         boolean tick() {
             previous=distance; previousFade=fade;
             distance=Math.min(confirmed,distance+WAVE_SPEED);

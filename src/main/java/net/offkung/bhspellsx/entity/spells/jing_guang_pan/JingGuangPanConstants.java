@@ -20,7 +20,8 @@ public final class JingGuangPanConstants {
     public static final double WAVE_THICKNESS = 0.22;
     public static final double WAVE_DEPTH = 0.24;
     public static final double WAVE_TAPER_POWER = 0.7;
-    public static final double WAVE_RIGHT_ROLL = 22.0, WAVE_LEFT_ROLL = -22.0;
+    public static final double WAVE_RIGHT_ROLL = -22.0, WAVE_LEFT_ROLL = 22.0;
+    public static final double WAVE_ROLL_JITTER_DEGREES = 4.0;
     public static final int WAVE_SEGMENTS = 12;
     public static final String DAMAGE_TYPE = "bhspells:gold_spell_bypass";
     public static double boostOffset(int tick) {

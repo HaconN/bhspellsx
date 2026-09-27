@@ -1092,3 +1092,40 @@ Validate without shaders and with Oculus: daylight/night, both slash directions,
 vertical aim, thin targets, block edges and empty crescent interior; nearest target
 only, range 7/speed 2.8/damage 4 gold_spell_bypass, two clients, short point-blank
 waves and batched packets. No impact effect or additional status VFX is introduced.
+
+
+## Jing Guang Pan: wave roll and dummy rendering investigation (2026-09-27)
+
+- Base roll: right **-22 degrees**, left **+22 degrees**. `WAVE_ROLL_JITTER_DEGREES = 4.0`
+  adds a uniform offset in [-4, +4) degrees, sampled once per wave on the server.
+  The final `rollDegrees` double drives server swept-prism geometry and is sent in every
+  WavePath update. Clients construct the same geometry from it without resampling.
+  `/cast` without animation uses the right-side default plus the same jitter.
+- Protocol **3 -> 5** adds a roll double after the side flag. Version 4 belonged to the
+  reverted owner-UUID experiment and is not reused. Server and clients need this build.
+  Damage, range, speed, timing and renderer drawing code are unchanged.
+- **Dummy compatibility warning (user's in-game test):** hitting MmmMmmMmmMmm's dummy,
+  even with a prior bare-hand hit, makes waves displaced/north-only on the attacker's
+  screen, while an observer sees correct positions. Test wave appearance against mobs
+  or players, not the dummy. This is a rendering interaction, not evidence of incorrect
+  spell damage/collision. The exact cause is NOT established from code alone.
+- Recon: deployed `dummmmmmy-1.20-2.0.12-forge.jar`. `TargetDummyRenderer` uses the normal
+  entity path with armor/cape/shield/elytra layers. `DamageNumberParticle.render` runs in
+  the particle pass, creates a local PoseStack, enables depth/blending, changes blend
+  factors, and flushes Minecraft's shared BufferSource with endBatch(). It has no explicit
+  restoration of incoming depth/blend state (text RenderTypes can reset state at flush).
+  No direct global model-view/projection writes or leaked event PoseStack were found in
+  this mod. Hay uses particles; DPS uses the vanilla action bar and health uses a boss bar.
+- Damage numbers go to the dummy's attacker tracker (300-tick timeout), while body hit
+  animation goes to all tracking clients. This explains a different rendering workload
+  after a prior punch and on attacker versus observer. Our wave runs AFTER_PARTICLES with
+  shared buffers, making interaction plausible. It does not prove spatial displacement:
+  blend state alone cannot explain north-only visibility. Vanilla/other-mod immunity
+  and the exact corrupt state still require a runtime frame/state capture.
+- No renderer fix here. Smallest future diagnostic: disable dummy damage numbers alone,
+  then DPS separately, and compare matrices/buffer state at AFTER_PARTICLES. If particle
+  stage contamination is confirmed, test moving only the wave event stage to AFTER_ENTITIES
+  (before particles), verifying transparency/Oculus; or restore only the state proven to
+  leak. Do not replace coordinate transforms speculatively. Why the reverted isolated-
+  buffer/matrix-reset renderer disappeared entirely remains unproven without a capture
+  of that build; mathematical coordinate tests do not validate the in-game render pipeline.

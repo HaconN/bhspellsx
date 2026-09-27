@@ -26,13 +26,17 @@ public final class JingGuangPanWave {
     private final ServerLevel level;
     private final Vec3 origin, direction;
     private final float yaw;
+    private final double rollDegrees;
     private final boolean left;
     private final JingGuangPanWaveShape shape;
     private double travelled;
     private JingGuangPanWave(ServerPlayer owner, boolean left) {
         this.owner=owner; this.left=left; level=owner.serverLevel();
         origin=owner.getEyePosition(); direction=owner.getLookAngle().normalize(); yaw=owner.getYRot();
-        shape=new JingGuangPanWaveShape(direction,yaw,left);
+        // Sample once on the server; collision and every client consume this exact angle.
+        rollDegrees=(left ? WAVE_LEFT_ROLL : WAVE_RIGHT_ROLL)
+                +(owner.getRandom().nextDouble()*2-1)*WAVE_ROLL_JITTER_DEGREES;
+        shape=new JingGuangPanWaveShape(direction,yaw,rollDegrees);
     }
     public boolean tick() {
         if (owner.isRemoved() || owner.level()!=level) return true;
@@ -55,7 +59,7 @@ public final class JingGuangPanWave {
         travelled+=step*(contact ? first : 1);
         boolean done=contact || remaining-step<1.0E-7;
         // At most three cumulative path updates per ordinary wave. No packets per spark.
-        BHXNetwork.wave(owner,new BHXNetwork.WavePath(id,level.dimension().location(),origin,direction,yaw,left,travelled,done));
+        BHXNetwork.wave(owner,new BHXNetwork.WavePath(id,level.dimension().location(),origin,direction,yaw,left,rollDegrees,travelled,done));
         if (target!=null) {
             var type=level.registryAccess().registryOrThrow(Registries.DAMAGE_TYPE).getHolderOrThrow(
                     ResourceKey.create(Registries.DAMAGE_TYPE,ResourceLocation.parse(DAMAGE_TYPE)));

@@ -13,9 +13,9 @@ import net.offkung.bhspellsx.entity.spells.jing_guang_pan.JingGuangPanManager;
 /** Direction-checked messages. Client callbacks are installed only by client setup. */
 public final class BHXNetwork {
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
-            ResourceLocation.fromNamespaceAndPath("bhspellsx", "jing_guang_pan"), () -> "3", "3"::equals, "3"::equals);
+            ResourceLocation.fromNamespaceAndPath("bhspellsx", "jing_guang_pan"), () -> "5", "5"::equals, "5"::equals);
     public record WavePath(UUID id, ResourceLocation dimension, net.minecraft.world.phys.Vec3 origin,
-            net.minecraft.world.phys.Vec3 direction, float yaw, boolean left, double distance, boolean done) {}
+            net.minecraft.world.phys.Vec3 direction, float yaw, boolean left, double rollDegrees, double distance, boolean done) {}
     public static Consumer<WavePath> clientWave = packet -> {};
     public record State(UUID session, boolean active, boolean gliding) {}
     public record Attack(UUID session, long sequence, boolean left) {}
@@ -61,11 +61,11 @@ public final class BHXNetwork {
             .encoder((p,b) -> { b.writeUUID(p.id()); b.writeResourceLocation(p.dimension());
                 b.writeDouble(p.origin().x); b.writeDouble(p.origin().y); b.writeDouble(p.origin().z);
                 b.writeDouble(p.direction().x); b.writeDouble(p.direction().y); b.writeDouble(p.direction().z);
-                b.writeFloat(p.yaw()); b.writeBoolean(p.left()); b.writeDouble(p.distance()); b.writeBoolean(p.done()); })
+                b.writeFloat(p.yaw()); b.writeBoolean(p.left()); b.writeDouble(p.rollDegrees()); b.writeDouble(p.distance()); b.writeBoolean(p.done()); })
             .decoder(b -> new WavePath(b.readUUID(), b.readResourceLocation(),
                 new net.minecraft.world.phys.Vec3(b.readDouble(),b.readDouble(),b.readDouble()),
                 new net.minecraft.world.phys.Vec3(b.readDouble(),b.readDouble(),b.readDouble()),
-                b.readFloat(),b.readBoolean(),b.readDouble(),b.readBoolean()))
+                b.readFloat(),b.readBoolean(),b.readDouble(),b.readDouble(),b.readBoolean()))
             .consumerMainThread((p,c) -> clientWave.accept(p)).add();
     }
     public static void wave(ServerPlayer owner, WavePath packet) {

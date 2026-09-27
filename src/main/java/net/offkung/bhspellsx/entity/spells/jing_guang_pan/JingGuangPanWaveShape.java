@@ -14,12 +14,12 @@ public final class JingGuangPanWaveShape {
     private final AABB bounds;
     private record Prism(Vec3[] vertices, List<Vec3> axes) {}
 
-    public JingGuangPanWaveShape(Vec3 direction, float yaw, boolean left) {
+    public JingGuangPanWaveShape(Vec3 direction, float yaw, double rollDegrees) {
         forward = direction.normalize();
         double y = Math.toRadians(yaw);
         Vec3 right = new Vec3(Math.cos(y), 0, Math.sin(y));
         Vec3 vertical = forward.cross(right).normalize(); // Stable at vertical pitch; yaw remains known.
-        double roll = Math.toRadians(left ? WAVE_LEFT_ROLL : WAVE_RIGHT_ROLL);
+        double roll = Math.toRadians(rollDegrees);
         across = right.scale(Math.cos(roll)).add(vertical.scale(Math.sin(roll)));
         up = vertical.scale(Math.cos(roll)).subtract(right.scale(Math.sin(roll)));
         AABB box = null;
