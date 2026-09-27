@@ -39,21 +39,21 @@ public final class JingGuangPanHaloRenderer {
             p.translate(center.x-camera.x,center.y-camera.y,center.z-camera.z);
             p.mulPose(Axis.YP.rotationDegrees(-yaw)); p.scale((float)scale,(float)scale,(float)scale);
             // Rear views keep only additive inner light: never place a dark translucent disc over the body.
-            plane(p,buffers.getBuffer(JingGuangPanRenderTypes.get("halo_inner",false)),
+            plane(p,buffers.getBuffer(JingGuangPanHaloRenderTypes.get("halo_inner",false)),
                     (float)(INNER_ALPHA*innerGain*(1-rear))*alpha*pulse);
-            buffers.endBatch(JingGuangPanRenderTypes.get("halo_inner",false));
-            plane(p,buffers.getBuffer(JingGuangPanRenderTypes.get("halo_inner",true)),
+            buffers.endBatch(JingGuangPanHaloRenderTypes.get("halo_inner",false));
+            plane(p,buffers.getBuffer(JingGuangPanHaloRenderTypes.get("halo_inner",true)),
                     (float)(INNER_ADDITIVE*innerGain)*alpha*pulse);
-            buffers.endBatch(JingGuangPanRenderTypes.get("halo_inner",true));
+            buffers.endBatch(JingGuangPanHaloRenderTypes.get("halo_inner",true));
             p.pushPose(); p.mulPose(Axis.ZP.rotationDegrees((float)(age*ROTATION_DEGREES_PER_SECOND/20)));
-            plane(p,buffers.getBuffer(JingGuangPanRenderTypes.get("halo_rays",true)),RAYS_ALPHA*alpha*pulse);
-            p.popPose(); buffers.endBatch(JingGuangPanRenderTypes.get("halo_rays",true));
-            plane(p,buffers.getBuffer(JingGuangPanRenderTypes.get("halo_ring",false)),RING_ALPHA*alpha);
-            buffers.endBatch(JingGuangPanRenderTypes.get("halo_ring",false));
-            plane(p,buffers.getBuffer(JingGuangPanRenderTypes.get("halo_ring",true)),GLOW_ALPHA*alpha*pulse);
-            buffers.endBatch(JingGuangPanRenderTypes.get("halo_ring",true));
+            plane(p,buffers.getBuffer(JingGuangPanHaloRenderTypes.get("halo_rays",true)),RAYS_ALPHA*alpha*pulse);
+            p.popPose(); buffers.endBatch(JingGuangPanHaloRenderTypes.get("halo_rays",true));
+            plane(p,buffers.getBuffer(JingGuangPanHaloRenderTypes.get("halo_ring",false)),RING_ALPHA*alpha);
+            buffers.endBatch(JingGuangPanHaloRenderTypes.get("halo_ring",false));
+            plane(p,buffers.getBuffer(JingGuangPanHaloRenderTypes.get("halo_ring",true)),GLOW_ALPHA*alpha*pulse);
+            buffers.endBatch(JingGuangPanHaloRenderTypes.get("halo_ring",true));
             // Thin solid rim thickness makes an exactly edge-on view readable.
-            var v=buffers.getBuffer(JingGuangPanRenderTypes.get("halo_spark",false));
+            var v=buffers.getBuffer(JingGuangPanHaloRenderTypes.get("halo_spark",false));
             for (int i=0;i<RING_SEGMENTS;i++) for (int j=0;j<TUBE_SEGMENTS;j++) {
                 for (int[] corner:new int[][]{{i,j},{i+1,j},{i+1,j+1},{i,j+1}}) {
                     double t=corner[0]*2*Math.PI/RING_SEGMENTS, q=corner[1]*2*Math.PI/TUBE_SEGMENTS;
@@ -61,13 +61,13 @@ public final class JingGuangPanHaloRenderer {
                     vertex(p,v,new Vec3(r*Math.cos(t),r*Math.sin(t),RIM_TUBE_RADIUS*Math.sin(q)),.5f,.5f,alpha,CREAM);
                 }
             }
-            buffers.endBatch(JingGuangPanRenderTypes.get("halo_spark",false));
+            buffers.endBatch(JingGuangPanHaloRenderTypes.get("halo_spark",false));
             Random random=new Random(SPARK_SEED);
             Vector3f right=new Vector3f(1,0,0).rotate(event.getCamera().rotation());
             Vector3f up=new Vector3f(0,1,0).rotate(event.getCamera().rotation());
             // Transform camera axes into halo-local coordinates so sparks remain billboards.
             right.rotateY((float)radians); up.rotateY((float)radians);
-            v=buffers.getBuffer(JingGuangPanRenderTypes.get("halo_spark",true));
+            v=buffers.getBuffer(JingGuangPanHaloRenderTypes.get("halo_spark",true));
             for (int i=0;i<SPARK_COUNT;i++) {
                 double t=random.nextDouble()*2*Math.PI+Math.toRadians(age*ROTATION_DEGREES_PER_SECOND/20);
                 double r=SPARK_RADIUS_MIN+random.nextDouble()*(SPARK_RADIUS_MAX-SPARK_RADIUS_MIN);
@@ -76,7 +76,7 @@ public final class JingGuangPanHaloRenderer {
                 Vec3 x=new Vec3(right.x,right.y,right.z).scale(size), y=new Vec3(up.x,up.y,up.z).scale(size);
                 quad(p,v,c.subtract(x).add(y),c.add(x).add(y),c.add(x).subtract(y),c.subtract(x).subtract(y),SPARK_ALPHA*alpha*pulse);
             }
-            buffers.endBatch(JingGuangPanRenderTypes.get("halo_spark",true));
+            buffers.endBatch(JingGuangPanHaloRenderTypes.get("halo_spark",true));
         } finally { p.popPose(); }
     }
     private static void plane(PoseStack p,VertexConsumer v,float alpha) {

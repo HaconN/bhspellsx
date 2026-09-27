@@ -68,15 +68,17 @@ def texture_set():
    halo=np.exp(-((r-ring)/RING_SOFT_WIDTH)**2)*.62
    a=np.maximum(shoulder*.98,halo)*edge
    mix=ridge*.86
-   c=GOLD*(1-mix[...,None])+WHITE*mix[...,None]
+   body=GOLD*.55+CREAM*.45
+   c=body*(1-mix[...,None])+WHITE*mix[...,None]
    # Broad pigmented gold outer shoulder remains visible against a bright sky.
-   outer=smooth((np.abs(r-ring)-.035)/.075)
-   c=c*(1-.32*outer[...,None])+DEEP*.32*outer[...,None]
+   outer=np.exp(-((r-(ring+.065))/.006)**2)
+   c=c*(1-.24*outer[...,None])+DEEP*.24*outer[...,None]
   elif kind=='halo_inner':
    # A filled warm sun: maximum luminance behind the head, no grey spiral pattern.
    a=.98*np.exp(-(r/(ring*.98))**4)*smooth((ring+.14-r)/.14)*edge
    hot=np.exp(-(r/.31)**2)
-   c=GOLD*(1-hot[...,None])+WHITE*hot[...,None]
+   body=GOLD*.55+CREAM*.45
+   c=body*(1-hot[...,None])+WHITE*hot[...,None]
   elif kind=='halo_rays':
    energy=np.zeros_like(r); rng=np.random.default_rng(SEED)
    for i in range(RAY_COUNT):
@@ -89,7 +91,8 @@ def texture_set():
     energy+=ray
    a=(1-np.exp(-energy))*edge
    tint=np.exp(-((r-ring)/.095)**2)*.65
-   c=GOLD*(1-tint[...,None])+CREAM*tint[...,None]
+   body=GOLD*.75+CREAM*.25
+   c=body*(1-tint[...,None])+CREAM*tint[...,None]
   else:
    a=np.maximum(np.exp(-np.abs(x)*42-np.abs(y)*5),np.exp(-np.abs(y)*42-np.abs(x)*5))
    a=np.maximum(a,np.exp(-(r/.10)**2)); a*=smooth((1-r)/.20)
@@ -153,7 +156,13 @@ def scene(tex,view,night):
   ix=(ux+1)*.5*(im.width-1); iy=(1-uy)*.5*(im.height-1)
   inside=(ix>=0)&(ix<im.width-1)&(iy>=0)&(iy<im.height-1)
   x=np.clip(ix,0,im.width-1).astype(int);y=np.clip(iy,0,im.height-1).astype(int)
-  pix=np.asarray(im)/255; sample=pix[y,x]
+  pix=np.asarray(im)/255
+  # GPU bilinear sampling with straight RGBA, no mipmaps (same as halo RenderType).
+  fx=(np.clip(ix,0,im.width-1)-x)[...,None];fy=(np.clip(iy,0,im.height-1)-y)[...,None]
+  x2=np.minimum(x+1,im.width-1);y2=np.minimum(y+1,im.height-1)
+  sample=(pix[y,x]*(1-fx)+pix[y,x2]*fx)*(1-fy)+(pix[y2,x]*(1-fx)+pix[y2,x2]*fx)*fy
+  # Eyes shader: no diffuse-light multiplier and no 0.1 alpha discard.
+  # Preview is within the no-fog range; shaderpack post-processing is not simulated.
   z=wx*math.sin(angle)-BACK_Z*math.cos(angle)
   alpha=sample[:,:,3]*gain*inside*(z>=bodydepth-1e-5)
   if add:img[:]=np.clip(img+sample[:,:,:3]*alpha[...,None],0,1)

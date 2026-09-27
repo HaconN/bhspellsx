@@ -1168,3 +1168,27 @@ client setup. Constants hold dimensions, opacity, timing, palette, mesh quality 
   first-person self, body yaw while flying/shooting, daylight/night and Oculus shaderpacks.
   Use players or mobs, never the target dummy for visual validation. Changing the halo's
   render stage is not a claimed fix for the separate existing wave/dummy interaction.
+
+
+### Halo brightness correction (2026-09-27)
+
+Halo rendering now uses its own `JingGuangPanHaloRenderTypes`, with the vanilla eyes shader
+and explicit SRC_ALPHA blend factors, culling disabled, depth test and no depth writes.
+Do not substitute vanilla RenderType.eyes(), whose blend defaults differ. The wave factory
+and wave assets are unchanged. The previous entity-translucent-emissive vertex shader
+applied minecraft_mix_light (0.4..1 brightness) despite FULL_BRIGHT UV2, and its fragment
+shader discarded texture alpha below 0.1. Eyes removes both diffuse shading and that cutoff.
+Verified Oculus 1.8.0 maps the getter to ENTITIES_EYES / SpiderEyes / FULLBRIGHT; shaderpacks
+can still override blending, fog and post-processing, so actual appearance needs in-game
+verification. Both vanilla shader paths apply fog fade, not fog-color tint; no blanket fog
+removal was introduced without evidence of it causing the reported near-player problem.
+
+All four halo and four wave textures had warm RGB, not black, at zero alpha. Filtering is
+bilinear with mipmaps disabled, so no black-fringe repair was warranted. Halo ring/inner
+pigment is now 55% gold + 45% cream; ray pigment is 75% gold + 25% cream. Deep gold is limited
+to a narrow outer ring shoulder (24% mix), replacing the broad 32% dark-gold contribution.
+The generator/preview now uses bilinear RGBA sampling instead of nearest-neighbor sampling;
+its alpha and additive compositing match the intended custom blend states, with unit diffuse
+lighting and no near-range fog. It does not simulate shaderpack post-processing. No in-game
+screenshots were accessible in the request; conclusions are based on code/assets and the
+reported symptoms, not a claim of a verified in-game visual match.
