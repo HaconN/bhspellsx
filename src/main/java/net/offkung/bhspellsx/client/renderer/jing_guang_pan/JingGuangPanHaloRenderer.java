@@ -81,45 +81,6 @@ public final class JingGuangPanHaloRenderer {
             }
             buffers.endBatch(JingGuangPanHaloRenderTypes.get("halo_spark",true));
         } finally { p.popPose(); }
-        aura(event,player,feet,camera,age,alpha);
-    }
-    private static void aura(RenderLevelStageEvent event, Player player, Vec3 feet, Vec3 camera,
-            double age, float activationAlpha) {
-        var buffers=Minecraft.getInstance().renderBuffers().bufferSource();
-        PoseStack p=event.getPoseStack(); p.pushPose();
-        try {
-            // World-upright and player-relative, independent of halo yaw/scale: no spray on turns.
-            p.translate(feet.x-camera.x,feet.y-camera.y,feet.z-camera.z);
-            Vector3f right=new Vector3f(1,0,0).rotate(event.getCamera().rotation());
-            Vector3f up=new Vector3f(0,1,0).rotate(event.getCamera().rotation());
-            double lod=1-smooth((feet.distanceTo(camera)-AURA_LOD_START)/(AURA_LOD_END-AURA_LOD_START));
-            long seed=AURA_SEED^player.getUUID().getMostSignificantBits()^player.getUUID().getLeastSignificantBits();
-            var v=buffers.getBuffer(JingGuangPanHaloRenderTypes.get("halo_spark",true));
-            for (int i=0;i<AURA_COUNT;i++) {
-                double time=age+(double)i*AURA_LIFE_TICKS/AURA_COUNT;
-                long cycle=(long)Math.floor(time/AURA_LIFE_TICKS);
-                double lived=time-cycle*AURA_LIFE_TICKS;
-                double fade=smooth(lived/AURA_FADE_TICKS)*smooth((AURA_LIFE_TICKS-lived)/AURA_FADE_TICKS);
-                float opacity=(float)(AURA_ALPHA*activationAlpha*fade*(i<AURA_FAR_COUNT ? 1 : lod));
-                if (opacity<=0) continue;
-                // Regenerate only mathematically: all viewers sample the same UUID/age/slot/cycle.
-                long mixed=seed+0x9E3779B97F4A7C15L*(i+1)+104729L*cycle;
-                mixed=(mixed^(mixed>>>30))*0xBF58476D1CE4E5B9L;
-                mixed=(mixed^(mixed>>>27))*0x94D049BB133111EBL;
-                Random random=new Random(mixed^(mixed>>>31));
-                double angle=random.nextDouble()*2*Math.PI;
-                double radius=Math.sqrt(AURA_RADIUS_MIN*AURA_RADIUS_MIN+random.nextDouble()
-                        *(AURA_RADIUS_MAX*AURA_RADIUS_MAX-AURA_RADIUS_MIN*AURA_RADIUS_MIN));
-                double y=AURA_START_Y_MIN+random.nextDouble()*(AURA_START_Y_MAX-AURA_START_Y_MIN)
-                        +lived*AURA_RISE_PER_TICK;
-                Vec3 c=new Vec3(radius*Math.cos(angle),y,radius*Math.sin(angle));
-                double size=(AURA_SIZE_MIN+random.nextDouble()*(AURA_SIZE_MAX-AURA_SIZE_MIN))/2;
-                Vec3 x=new Vec3(right.x,right.y,right.z).scale(size), vertical=new Vec3(up.x,up.y,up.z).scale(size);
-                quad(p,v,c.subtract(x).add(vertical),c.add(x).add(vertical),
-                        c.add(x).subtract(vertical),c.subtract(x).subtract(vertical),opacity);
-            }
-            buffers.endBatch(JingGuangPanHaloRenderTypes.get("halo_spark",true));
-        } finally { p.popPose(); }
     }
     private static void plane(PoseStack p,VertexConsumer v,float alpha) {
         double r=RAY_RADIUS;

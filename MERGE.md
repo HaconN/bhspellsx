@@ -1220,3 +1220,16 @@ alpha .45; horizontal annulus .38-.70 blocks; initial height .05-1.60 above feet
 to another .48 blocks over the lifetime. Existing twelve halo sparks are unchanged. Client
 age synchronization uses the existing halo packet, so network delay can cause a small phase
 difference between clients; no per-mote network traffic is introduced.
+
+
+### Aura switched to game particles (2026-09-28)
+
+Removed the full-body renderer motes and their obsolete settings; halo and rim sparks stay
+unchanged. HaloVfx now emits client-local minecraft:end_rod using existing synced halo state,
+1 particle every 4 ticks (5/sec/player), annulus .35-.70 blocks, start height .10-1.80,
+outward velocity .005 and upward .012 blocks/tick. Range remains 64 blocks. Emission requires
+active/alive/visible player, not first-person self; no packets, no forced particle setting.
+Existing particles finish their vanilla lifetime after emission stops (toggle off, invisibility
+or first-person switch); they are not renderer-owned and cannot instantly follow halo fading.
+AURA_PARTICLE_ID accepts parameterless SimpleParticleType replacements; RGB/options-based
+alternatives require their ParticleOptions too, not merely changing the ID.

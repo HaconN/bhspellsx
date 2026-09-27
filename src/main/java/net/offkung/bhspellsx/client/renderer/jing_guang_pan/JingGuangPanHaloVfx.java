@@ -4,6 +4,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.particles.SimpleParticleType;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
@@ -55,6 +58,29 @@ public final class JingGuangPanHaloVfx {
             else if (v.seen || clock-v.received>SPAWN_GRACE_TICKS) return true;
             return !v.active && clock-v.received>=CLOSE_TICKS;
         });
+        if (clock%AURA_INTERVAL_TICKS==0) emitAura();
+    }
+    private static void emitAura() {
+        var mc=Minecraft.getInstance();
+        var id=ResourceLocation.tryParse(AURA_PARTICLE_ID);
+        if (id==null || !(BuiltInRegistries.PARTICLE_TYPE.get(id) instanceof SimpleParticleType particle)) return;
+        var camera=mc.gameRenderer.getMainCamera().getPosition();
+        for (var entry:HALOS.entrySet()) {
+            if (!entry.getValue().active) continue;
+            var player=world.getPlayerByUUID(entry.getKey());
+            if (player==null || !player.isAlive() || player.isRemoved() || player.isInvisible() || player.isSpectator()) continue;
+            if (player==mc.player && mc.options.getCameraType().isFirstPerson()) continue;
+            if (player.position().distanceToSqr(camera)>RENDER_DISTANCE*RENDER_DISTANCE) continue;
+            for (int i=0;i<AURA_PARTICLES_PER_BURST;i++) {
+                double angle=world.random.nextDouble()*2*Math.PI;
+                double radius=Math.sqrt(AURA_RADIUS_MIN*AURA_RADIUS_MIN+world.random.nextDouble()
+                        *(AURA_RADIUS_MAX*AURA_RADIUS_MAX-AURA_RADIUS_MIN*AURA_RADIUS_MIN));
+                double y=AURA_START_Y_MIN+world.random.nextDouble()*(AURA_START_Y_MAX-AURA_START_Y_MIN);
+                world.addParticle(particle,player.getX()+Math.cos(angle)*radius,player.getY()+y,
+                        player.getZ()+Math.sin(angle)*radius,Math.cos(angle)*AURA_OUTWARD_SPEED,
+                        AURA_UPWARD_SPEED,Math.sin(angle)*AURA_OUTWARD_SPEED);
+            }
+        }
     }
     @SubscribeEvent public static void render(RenderLevelStageEvent event) {
         if (event.getStage()!=RenderLevelStageEvent.Stage.AFTER_ENTITIES) return;
