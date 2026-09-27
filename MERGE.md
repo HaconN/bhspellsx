@@ -1222,25 +1222,17 @@ age synchronization uses the existing halo packet, so network delay can cause a 
 difference between clients; no per-mote network traffic is introduced.
 
 
-### Aura switched to game particles (2026-09-28)
+### Current aura: gold sparkle only (2026-09-28)
 
-Removed the full-body renderer motes and their obsolete settings; halo and rim sparks stay
-unchanged. HaloVfx now emits client-local minecraft:end_rod using existing synced halo state,
-1 particle every 4 ticks (5/sec/player), annulus .35-.70 blocks, start height .10-1.80,
-outward velocity .005 and upward .012 blocks/tick. Range remains 64 blocks. Emission requires
-active/alive/visible player, not first-person self; no packets, no forced particle setting.
-Existing particles finish their vanilla lifetime after emission stops (toggle off, invisibility
-or first-person switch); they are not renderer-owned and cannot instantly follow halo fading.
-AURA_PARTICLE_ID accepts parameterless SimpleParticleType replacements; RGB/options-based
-alternatives require their ParticleOptions too, not merely changing the ID.
+The full-body renderer motes have been removed; halo and rim sparks stay unchanged.
+HaloVfx emits only client-local bhspells:gold_sparkle using existing synced halo state.
+End-rod emission and its ID/rate constants have been removed. Gold settings are unchanged:
+1 particle every 10 ticks (2/sec/player at 20 TPS), annulus .35-.70 blocks, initial height
+.10-1.80, outward velocity .0025 and upward .006 blocks/tick, render distance 64 blocks.
+Emission requires active/alive/visible player and excludes first-person self; no extra
+packets or forced particle setting. Existing particles finish their own lifetime after
+emission stops. AURA_GOLD_SPARKLE_ID supports parameterless SimpleParticleType replacements.
 
-
-### Mixed aura rate adjustment (2026-09-28)
-
-Aura now emits minecraft:end_rod and bhspells:gold_sparkle independently, each with its
-own ID, interval (10 ticks) and burst count (1): 2/sec/type at 20 TPS. Shared initial outward
-velocity is .0025 and upward .006 blocks/tick. Both use the same existing client emission
-visibility gates and volume, with no extra packets. GoldSparkleParticle in bhspells 1.3.0
-accepts supplied initial velocity directly, then vanilla particle ticking applies its .05
-gravity and drag; it rises briefly and falls rather than maintaining the requested upward
-speed. Lifetime is 15-24 ticks. No physics override or workaround is introduced.
+GoldSparkleParticle in bhspells 1.3.0 accepts supplied initial velocity directly, then vanilla
+particle ticking applies its .05 gravity and drag; it rises briefly and falls rather than
+maintaining the requested upward speed. Lifetime is 15-24 ticks. No physics override.

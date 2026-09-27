@@ -15,8 +15,7 @@ public final class JingGuangPanHaloConstants {
     public static final float SPARK_ALPHA=.9f;
     public static final long SPARK_SEED=427;
     // Client-local game particles. ID-only replacement supports SimpleParticleType options.
-    public static final String AURA_END_ROD_ID="minecraft:end_rod", AURA_GOLD_SPARKLE_ID="bhspells:gold_sparkle";
-    public static final int AURA_END_ROD_INTERVAL_TICKS=10, AURA_END_ROD_PER_BURST=1;
+    public static final String AURA_GOLD_SPARKLE_ID="bhspells:gold_sparkle";
     public static final int AURA_GOLD_INTERVAL_TICKS=10, AURA_GOLD_PER_BURST=1;
     public static final double AURA_RADIUS_MIN=.35, AURA_RADIUS_MAX=.70;
     public static final double AURA_START_Y_MIN=.10, AURA_START_Y_MAX=1.80;

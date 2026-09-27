@@ -58,7 +58,6 @@ public final class JingGuangPanHaloVfx {
             else if (v.seen || clock-v.received>SPAWN_GRACE_TICKS) return true;
             return !v.active && clock-v.received>=CLOSE_TICKS;
         });
-        if (clock%AURA_END_ROD_INTERVAL_TICKS==0) emitAura(AURA_END_ROD_ID,AURA_END_ROD_PER_BURST);
         if (clock%AURA_GOLD_INTERVAL_TICKS==0) emitAura(AURA_GOLD_SPARKLE_ID,AURA_GOLD_PER_BURST);
     }
     private static void emitAura(String particleId, int count) {
