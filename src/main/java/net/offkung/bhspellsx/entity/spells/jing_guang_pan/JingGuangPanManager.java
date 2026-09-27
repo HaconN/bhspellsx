@@ -92,6 +92,7 @@ public final class JingGuangPanManager {
             }
         }
         if (changed) {
+            JingGuangPanSounds.toggle(player, enabled);
             BHXNetwork.state(player, state.session, state.active, state.gliding);
             if (enabled) BHXNetwork.boost(player, state.session, state.boostY, false);
         }

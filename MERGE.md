@@ -1236,3 +1236,24 @@ emission stops. AURA_GOLD_SPARKLE_ID supports parameterless SimpleParticleType r
 GoldSparkleParticle in bhspells 1.3.0 accepts supplied initial velocity directly, then vanilla
 particle ticking applies its .05 gravity and drag; it rises briefly and falls rather than
 maintaining the requested upward speed. Lifetime is 15-24 ticks. No physics override.
+
+
+### Jing Guang Pan chosen sounds (2026-09-28)
+
+User-provided asset/bai_long_lian/skill1-1.mp3 (2.088s), skill1-2.mp3 (8.04s), skill2.mp3
+(1.296s) converted to mono 48kHz Ogg Vorbis under sounds/jing_guang_pan/activate_1.ogg,
+activate_2.ogg and wave.ogg. No trimming or source-file edits. Register three events in
+BHXSoundRegistry and sounds.json. Activation plays both open events on the SAME server tick,
+not as random alternatives. Each volume .35, pitch 1. Wave sound plays only when an actual
+wave spawns (including /cast), volume .18 and server-random pitch .95-1.05. Rejected/buffered
+clicks alone make no shot sound. The 1.296s source tail overlaps at four shots/second.
+
+Living-target contact plays epicfight:entity.hit.blade at the wave's collision position,
+volume .22 / pitch 1.1, including contact with a damage-immune target; block contact stays
+silent. Normal active->inactive transition (including mana exhaustion) plays vanilla
+block.beacon.deactivate, volume .20 / pitch 1.25. Login/logout/death/dimension cleanup does
+not invent additional toggle sounds. JingGuangPanSounds holds all cue volumes/pitches.
+ServerLevel.playSound uses the PLAYERS category and vanilla network delivery to caster and
+nearby players; no client prediction double-play or protocol change. Full clips play to
+completion; toggling off does not stop the previous activation tail. In-game sound balance
+and rapid-fire overlap still need listening tests with mobs/players (not the target dummy).

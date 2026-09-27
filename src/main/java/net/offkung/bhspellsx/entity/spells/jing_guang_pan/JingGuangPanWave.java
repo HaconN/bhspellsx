@@ -18,7 +18,7 @@ import static net.offkung.bhspellsx.entity.spells.jing_guang_pan.JingGuangPanCon
 /** Server-only continuously swept crescent. Client presentation has no damage authority. */
 public final class JingGuangPanWave {
     private static final List<JingGuangPanWave> WAVES = new ArrayList<>();
-    public static void spawn(ServerPlayer owner, boolean left) { WAVES.add(new JingGuangPanWave(owner, left)); }
+    public static void spawn(ServerPlayer owner, boolean left) { WAVES.add(new JingGuangPanWave(owner, left)); JingGuangPanSounds.wave(owner); }
     public static void tickAll() { WAVES.removeIf(JingGuangPanWave::tick); }
     public static void clearAll() { WAVES.clear(); }
     private final UUID id = UUID.randomUUID();
@@ -61,6 +61,7 @@ public final class JingGuangPanWave {
         // At most three cumulative path updates per ordinary wave. No packets per spark.
         BHXNetwork.wave(owner,new BHXNetwork.WavePath(id,level.dimension().location(),origin,direction,yaw,left,rollDegrees,travelled,done));
         if (target!=null) {
+            JingGuangPanSounds.hit(level,origin.add(direction.scale(travelled)));
             var type=level.registryAccess().registryOrThrow(Registries.DAMAGE_TYPE).getHolderOrThrow(
                     ResourceKey.create(Registries.DAMAGE_TYPE,ResourceLocation.parse(DAMAGE_TYPE)));
             target.hurt(new DamageSource(type,owner,owner),DAMAGE);

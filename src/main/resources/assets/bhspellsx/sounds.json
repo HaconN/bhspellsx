@@ -4,5 +4,20 @@
     "sounds": [
       "bhspellsx:xian_she_huan_ying_eye_stare"
     ]
+  },
+  "jing_guang_pan_activate_1": {
+    "sounds": [
+      "bhspellsx:jing_guang_pan/activate_1"
+    ]
+  },
+  "jing_guang_pan_activate_2": {
+    "sounds": [
+      "bhspellsx:jing_guang_pan/activate_2"
+    ]
+  },
+  "jing_guang_pan_wave": {
+    "sounds": [
+      "bhspellsx:jing_guang_pan/wave"
+    ]
   }
 }

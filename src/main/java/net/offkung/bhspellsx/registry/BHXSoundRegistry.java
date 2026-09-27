@@ -8,10 +8,10 @@ import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
 
 /**
- * Custom sound events for bhspellsx — currently just Xian She Huan Ying's "being watched" cue
+ * Custom sound events for bhspellsx â€” currently just Xian She Huan Ying's "being watched" cue
  * (see XianSheHuanYingTargetEntity, client tick only). Same DeferredRegister&lt;SoundEvent&gt;
  * pattern bhspells' own BHSoundRegistry uses (decompiled reference at
- * Origins/Mods/_reference/bhspells-1.3.0-decompiled/.../registry/BHSoundRegistry.java) — a
+ * Origins/Mods/_reference/bhspells-1.3.0-decompiled/.../registry/BHSoundRegistry.java) â€” a
  * matching entry in assets/bhspellsx/sounds.json plus the .ogg file under
  * assets/bhspellsx/sounds/ is the other half; nothing else is needed to make a custom sound work.
  */
@@ -21,6 +21,10 @@ public class BHXSoundRegistry {
 
     public static final RegistryObject<SoundEvent> XIAN_SHE_HUAN_YING_EYE_STARE =
             registerSoundEvent("xian_she_huan_ying_eye_stare");
+
+    public static final RegistryObject<SoundEvent> JING_GUANG_PAN_ACTIVATE_1 = registerSoundEvent("jing_guang_pan_activate_1");
+    public static final RegistryObject<SoundEvent> JING_GUANG_PAN_ACTIVATE_2 = registerSoundEvent("jing_guang_pan_activate_2");
+    public static final RegistryObject<SoundEvent> JING_GUANG_PAN_WAVE = registerSoundEvent("jing_guang_pan_wave");
 
     public static void register(IEventBus eventBus) {
         SOUND_EVENTS.register(eventBus);
