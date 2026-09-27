@@ -13,9 +13,17 @@ import net.offkung.bhspellsx.entity.spells.jing_guang_pan.JingGuangPanManager;
 /** Direction-checked messages. Client callbacks are installed only by client setup. */
 public final class BHXNetwork {
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
-            ResourceLocation.fromNamespaceAndPath("bhspellsx", "jing_guang_pan"), () -> "5", "5"::equals, "5"::equals);
+            ResourceLocation.fromNamespaceAndPath("bhspellsx", "jing_guang_pan"), () -> "6", "6"::equals, "6"::equals);
     public record WavePath(UUID id, ResourceLocation dimension, net.minecraft.world.phys.Vec3 origin,
             net.minecraft.world.phys.Vec3 direction, float yaw, boolean left, double rollDegrees, double distance, boolean done) {}
+    public record Halo(UUID player, ResourceLocation dimension, long revision, long age, boolean active, boolean clear) {}
+    public static Consumer<Halo> clientHalo = packet -> {};
+    public static void halo(ServerPlayer player, Halo packet) {
+        CHANNEL.send(PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> player), packet);
+    }
+    public static void haloTo(ServerPlayer viewer, Halo packet) {
+        CHANNEL.send(PacketDistributor.PLAYER.with(() -> viewer), packet);
+    }
     public static Consumer<WavePath> clientWave = packet -> {};
     public record State(UUID session, boolean active, boolean gliding) {}
     public record Attack(UUID session, long sequence, boolean left) {}
@@ -28,6 +36,11 @@ public final class BHXNetwork {
     public static Consumer<State> clientState = packet -> {};
     public static Consumer<Animation> clientAnimation = packet -> {};
     public static void register() {
+        CHANNEL.messageBuilder(Halo.class, 7, NetworkDirection.PLAY_TO_CLIENT)
+            .encoder((p,b) -> { b.writeUUID(p.player()); b.writeResourceLocation(p.dimension());
+                b.writeLong(p.revision()); b.writeLong(p.age()); b.writeBoolean(p.active()); b.writeBoolean(p.clear()); })
+            .decoder(b -> new Halo(b.readUUID(),b.readResourceLocation(),b.readLong(),b.readLong(),b.readBoolean(),b.readBoolean()))
+            .consumerMainThread((p,c) -> clientHalo.accept(p)).add();
         CHANNEL.messageBuilder(State.class, 0, NetworkDirection.PLAY_TO_CLIENT)
             .encoder((p, b) -> { b.writeUUID(p.session()); b.writeBoolean(p.active()); b.writeBoolean(p.gliding()); })
             .decoder(b -> new State(b.readUUID(), b.readBoolean(), b.readBoolean()))

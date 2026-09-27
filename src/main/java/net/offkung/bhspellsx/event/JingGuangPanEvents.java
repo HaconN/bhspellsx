@@ -38,5 +38,13 @@ public final class JingGuangPanEvents {
     @SubscribeEvent public static void logout(PlayerEvent.PlayerLoggedOutEvent e) { if (e.getEntity() instanceof ServerPlayer p) JingGuangPanManager.clear(p, false); }
     @SubscribeEvent public static void dimension(PlayerEvent.PlayerChangedDimensionEvent e) { if (e.getEntity() instanceof ServerPlayer p) JingGuangPanManager.clear(p, true); }
     @SubscribeEvent public static void respawn(PlayerEvent.PlayerRespawnEvent e) { if (e.getEntity() instanceof ServerPlayer p) JingGuangPanManager.clear(p, true); }
+    @SubscribeEvent public static void startTracking(PlayerEvent.StartTracking e) {
+        if (e.getEntity() instanceof ServerPlayer viewer && e.getTarget() instanceof ServerPlayer target)
+            JingGuangPanManager.haloTracking(viewer, target, true);
+    }
+    @SubscribeEvent public static void stopTracking(PlayerEvent.StopTracking e) {
+        if (e.getEntity() instanceof ServerPlayer viewer && e.getTarget() instanceof ServerPlayer target)
+            JingGuangPanManager.haloTracking(viewer, target, false);
+    }
     @SubscribeEvent public static void stop(ServerStoppedEvent e) { JingGuangPanManager.stop(); JingGuangPanWave.clearAll(); }
 }

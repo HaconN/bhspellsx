@@ -27,6 +27,8 @@ import net.offkung.bhspellsx.registry.BHXParticleRegistry;
 public class BHSpellsXClient {
     @SubscribeEvent
     public static void onClientSetup(net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent event) {
+        event.enqueueWork(() -> net.offkung.bhspellsx.network.BHXNetwork.clientHalo =
+                net.offkung.bhspellsx.client.renderer.jing_guang_pan.JingGuangPanHaloVfx::receive);
         event.enqueueWork(() -> net.offkung.bhspellsx.network.BHXNetwork.clientWave =
                 net.offkung.bhspellsx.client.renderer.jing_guang_pan.JingGuangPanVfx::receive);
     }

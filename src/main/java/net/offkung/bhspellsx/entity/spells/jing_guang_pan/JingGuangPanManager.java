@@ -17,6 +17,7 @@ public final class JingGuangPanManager {
     private static final UUID ATTACK_LISTENER = UUID.fromString("e55d1f44-ed95-40eb-bded-4d2f67a57ed9");
     private static final class State {
         UUID session = UUID.randomUUID();
+        long haloStarted, haloRevision;
         boolean active, gliding, startFlying;
         int boost;
         double boostY;
@@ -74,6 +75,9 @@ public final class JingGuangPanManager {
         boolean activationChanged = changed;
         if (changed) {
             state.active = enabled;
+            state.haloRevision = ++nextHaloRevision;
+            if (enabled) state.haloStarted = player.level().getGameTime();
+            BHXNetwork.halo(player, haloPacket(player, state, false));
             state.session = UUID.randomUUID();
             state.lastSequence = -1;
             state.pending = -1;
@@ -161,10 +165,23 @@ public final class JingGuangPanManager {
         return active(player) || (state != null && (state.active || state.gliding));
     }
     public static void clear(ServerPlayer player, boolean notify) {
+        BHXNetwork.halo(player, haloPacket(player, null, true));
         player.removeTag(ACTIVE_TAG);
         STATES.remove(player.getUUID());
         if (notify) BHXNetwork.state(player, UUID.randomUUID(), false, false);
     }
     public static void stop() { STATES.clear(); }
+    private static long nextHaloRevision;
+    private static BHXNetwork.Halo haloPacket(ServerPlayer player, State state, boolean clear) {
+        return new BHXNetwork.Halo(player.getUUID(), player.level().dimension().location(),
+                state == null ? ++nextHaloRevision : state.haloRevision,
+                state == null ? 0 : Math.max(0, player.level().getGameTime()-state.haloStarted),
+                state != null && state.active, clear);
+    }
+    public static void haloTracking(ServerPlayer viewer, ServerPlayer target, boolean start) {
+        State state = STATES.get(target.getUUID());
+        if (!start || state != null && state.active)
+            BHXNetwork.haloTo(viewer, haloPacket(target, state, !start));
+    }
     private JingGuangPanManager() {}
 }
