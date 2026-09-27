@@ -6,6 +6,7 @@ import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.RegistryObject;
 import net.offkung.bhspellsx.spells.gold.AmethystDecreeSpell;
+import net.offkung.bhspellsx.spells.gold.JingGuangPanSpell;
 import net.offkung.bhspellsx.spells.gold.XianSheHuanYingSpell;
 import net.offkung.bhspellsx.spells.ground.EmbracingBosomSpell;
 import net.offkung.bhspellsx.spells.water.CrystalHydroDomeSpell;
@@ -24,6 +25,9 @@ public class BHXSpellRegistry {
 
     public static final RegistryObject<AbstractSpell> AMETHYST_DECREE =
             registerSpell(new AmethystDecreeSpell());
+
+    public static final RegistryObject<AbstractSpell> JING_GUANG_PAN =
+            registerSpell(new JingGuangPanSpell());
 
     public static final RegistryObject<AbstractSpell> CRYSTAL_HYDRO_DOME =
             registerSpell(new CrystalHydroDomeSpell());

@@ -26,6 +26,12 @@ import net.offkung.bhspellsx.registry.BHXParticleRegistry;
 @Mod.EventBusSubscriber(modid = BHSpellsX.MODID, value = Dist.CLIENT, bus = Mod.EventBusSubscriber.Bus.MOD)
 public class BHSpellsXClient {
     @SubscribeEvent
+    public static void onClientSetup(net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent event) {
+        event.enqueueWork(() -> net.offkung.bhspellsx.network.BHXNetwork.clientWave =
+                net.offkung.bhspellsx.client.renderer.jing_guang_pan.JingGuangPanVfx::receive);
+    }
+
+    @SubscribeEvent
     public static void onRegisterRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerEntityRenderer(BHXEntityRegistry.EMBRACING_BOSOM_AOE.get(), EmbracingBosomRingRenderer::new);
         // Phase 1: no custom VFX yet, so a no-render renderer — same as bhspells' own house

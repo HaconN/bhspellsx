@@ -116,6 +116,9 @@ dependencies {
     compileOnly fg.deobf(files("libs/geckolib-forge-1.20.1-4.8.3.jar"))
     compileOnly fg.deobf(files("libs/traveloptics-6.3.0-1.20.1.jar"))
     compileOnly fg.deobf(files("libs/bhspells-1.20.1-1.3.0-forge.jar"))
+    // Exact deployed Epic Fight API; not bundled, and no EFN/Avalon dependency.
+    compileOnly files("libs/epic-fight-20.14.17-mc1.20.1-forge.jar")
+    compileOnly files("libs/epic-fight-invincible-lib-20.14.8.2-mc1.20.1-forge.jar")
 }
 
 // This block of code expands all declared replace properties in the specified resource targets.
@@ -141,6 +144,7 @@ tasks.named('processResources', ProcessResources).configure {
 tasks.named('jar', Jar).configure {
     manifest {
         attributes([
+                'MixinConfigs'           : 'bhspellsx.mixins.json,bhspellsx.invincible.mixins.json',
                 'Specification-Title'     : mod_id,
                 'Specification-Vendor'    : mod_authors,
                 'Specification-Version'   : '1', // We are version 1 of ourselves

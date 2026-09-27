@@ -44,6 +44,8 @@ public class BHSpellsX {
         MinecraftForge.EVENT_BUS.register(EmbracingBosomEvents.class);
         MinecraftForge.EVENT_BUS.register(CrystalHydroDomeEvents.class);
         MinecraftForge.EVENT_BUS.register(XianSheHuanYingEvents.class);
+        MinecraftForge.EVENT_BUS.register(net.offkung.bhspellsx.event.JingGuangPanEvents.class);
+        net.offkung.bhspellsx.network.BHXNetwork.register();
         modEventBus.addListener(BHSpellsX::checkAmethystDecreeMobEffects);
     }
 

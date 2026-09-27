@@ -553,9 +553,12 @@ damage are redirected/countered; this was investigated and cancelled (see
    (`MixinKeyboardHandler`, `MixinMouseHandler`, `MixinKeyMapping`) that all gate on the mere
    *presence* of `efn:stop` specifically, blocking every keypress, click, and mouse-look —
    including opening the inventory, F3, and the pause menu, not just movement. None of those
-   Mixins reference `efn:horizontalstop`/`efn:verticalstop` at all, so applying that pair
-   together (one freezes X/Z, the other freezes Y) gets the same full position-freeze while
-   blocking no input themselves — the caster can still look and attack. Separately, while the
+   Mixins reference `efn:horizontalstop`/`efn:verticalstop` at all. In-game testing on
+   2026-09-26 found that `horizontalstop` alone only slows the player: walking, jumping,
+   and attacking still work; it does not lock X/Z. Keep the pair as the dome's current
+   setup, but its observed movement restriction may also come from Iron's CONTINUOUS
+   casting. The pair has not been tested independently of casting, nor has `verticalstop`
+   alone, so a full position freeze is not confirmed. Separately, while the
    dome's cast is active the player can't open chat or inventory (observed in-game; the dome
    stays up). Opening a container or pressing another skill cancels the cast and breaks the
    dome. `amethyst_decree`'s own use of `efn:stop` was deliberately left untouched — that's a
@@ -758,9 +761,12 @@ and the reasons behind it: `docs/crystal_hydro_dome_decisions.md`.
   another skill, death, logout, dimension change — breaks the dome immediately (no end heal,
   no knockback) via `CrystalHydroDomeAoe.endActiveDomeFor()`, and the cast bar disappears
   right away rather than lingering.
-- **Root:** `efn:horizontalstop` + `efn:verticalstop` reapplied every tick (NOT `efn:stop` —
+- **Caster movement effects:** `efn:horizontalstop` + `efn:verticalstop` reapplied every tick (NOT `efn:stop` —
   see this file's earlier note on why: `efn:stop`'s client mixins block all input, not just
-  movement). Caster can look and attack while the dome is up; walking and jumping are locked.
+  movement). `horizontalstop` alone only slows the player; walking, jumping, and attacking
+  still work (tested 2026-09-26). The dome's observed movement restriction may also come
+  from CONTINUOUS casting; the pair has not been tested independently, and `verticalstop`
+  alone has not been tested. Do not treat this as a confirmed position lock.
   Chat/inventory can't be opened during the cast (observed in testing, accepted) — opening a
   container cancels the cast and breaks the dome.
 - **Size:** hemisphere radius/height 10 blocks; knockback ring 10–13 blocks out, -2..+11
@@ -793,3 +799,296 @@ Once all three spells are confirmed, this `bhspellsx` repo can be archived or de
 has no further purpose after a successful merge. (If more phases are planned, keep the repo
 and start the next phase's content in a fresh subpackage under `net/offkung/bhspellsx/...`
 instead.)
+
+---
+
+## Jing Guang Pan — เนตรชำระศักดิ์สิทธิ์ (bai_long_lian), Phase 2
+
+The gold toggle remains datapack-driven; each wave is now one Iron's instant cast,
+`bhspellsx:jing_guang_pan`, school `bhspells:gold`. The source datapack is `Origins/bai_long_lian`, origin `pers:bai_long_lian`. It owns the
+`base:spell/mana` drain (2 per 20 ticks), toggle and Apoli creative-flight permission.
+`pers_jing_guang_pan` is the server authority tag. Java sends explicit state/session
+packets to the caster; scoreboard tags are not assumed to synchronize to the client.
+The visible `active_self` power carries the verified Traveloptics `spectral_blink.png`
+icon, Thai TODO name/description and cooldown 0. The hidden `toggle` has no icon field.
+The drain follows the existing snake pattern: Apoli can debit on the first eligible
+tick, not necessarily one full second after enabling. Minimum mana to enable is 2;
+the post-debit zero check disables immediately, with a 1-tick watchdog for external
+mana depletion or Java removing the tag. No additional mana cost for a wave.
+
+### Merge files and dependencies
+
+- New Iron's spell: `spells/gold/JingGuangPanSpell.java`; integrate its entry in
+  `registry/BHXSpellRegistry.java` and name/guide in `assets/bhspellsx/lang/en_us.json`.
+- `assets/bhspellsx/textures/gui/spell_icons/jing_guang_pan.png` is a **temporary icon**,
+  copied byte-for-byte from Traveloptics 6.3.0's
+  `assets/traveloptics/textures/gui/spell_icons/spectral_blink.png`. Iron's 3.16.1
+  `getSpellIconResource()` is final and derives the path from the spell namespace/name;
+  it cannot directly use the cross-mod texture path used by Apoli.
+
+- Portable Java: `entity/spells/jing_guang_pan/JingGuangPanConstants.java`,
+  `JingGuangPanManager.java`, `JingGuangPanWave.java`, `JingGuangPanCombos.java`,
+  `JingGuangPanPrediction.java`;
+  `event/JingGuangPanEvents.java`; `client/JingGuangPanClient.java`.
+- Integrate bootstrap `network/BHXNetwork.java` and the event/network wiring in
+  `BHSpellsX.java` into the destination mod's networking/event setup.
+- Integrate both accessors in `registry/BHXAnimationRegistry.java`; copy both clips
+  and their small `data/` metadata JSONs under
+  `assets/bhspellsx/animmodels/animations/biped/spells/` (rename namespace at merge).
+- Since Phase 1, Epic Fight **20.14.17** is a `compileOnly` dependency. Phase 2 adds
+  Invincible **20.14.8.2** as `compileOnly`. Both exact deployed jars go in ignored
+  `libs/`; neither dependency is bundled. `META-INF/mods.toml` now declares both
+  mandatory minimum runtime requirements: Epic Fight `[20.14.17,)` and Invincible
+  `[20.14.8.2,)`, BOTH sides, AFTER ordering. Minimum ranges allow newer versions;
+  compileOnly stays pinned to the verified deployed APIs. Both mods remain mandatory
+  because Java calls their APIs directly; optional mixins do not make Invincible itself
+  optional. EFN/Avalon are not additional compile dependencies.
+- Carry the three mixin classes listed below, `bhspellsx.mixins.json`,
+  `bhspellsx.invincible.mixins.json` and the jar
+  manifest's `MixinConfigs` entry into the target build. Targets use mod-owned,
+  unmapped names/descriptors with `remap=false`; no vanilla injection/refmap is used.
+- `tools/mirror_judgement_cut.py` is an authoring tool, never a packaged asset.
+- Technical instructions were moved byte-for-byte from `CLAUDE.md` to `AGENTS.md`;
+  `CLAUDE.md` contains only `@AGENTS.md`. The existing deployment rule text is intact;
+  this task's explicit user authorization permits direct jar copies to both instances.
+
+### Input mixins and their scope
+
+1. `mixin/client/EpicFightInputMixin` injects `ControlEngine.maybeAttack` HEAD to
+   replace basic attacks while active, and `handleEpicFightKeyMappings` HEAD to
+   discard only a reserved BASIC_ATTACK. It does not clear dodge/guard/innate reserves.
+   EF `SKILL_CAST_EVENT` is also canceled for BASIC_ATTACK on client and server.
+   The event alone is insufficient for input cleanup: `ControlEngine.maybeAttack`
+   can still call `reserveKey` after an unsuccessful cast and then `lockHotkeys`.
+   The HEAD injection prevents those side effects and clears an existing basic reserve.
+   This Epic Fight mixin remains required, with `defaultRequire: 1`.
+2. `mixin/client/InvincibleInputMixin` injects `InputManager.testPressedTime` HEAD
+   to reject only combo types containing a KEY_1..KEY_4 actually bound to mouse-left.
+   `onClientTick` HEAD clears only those input cache entries; right-click/dodge/other
+   key entries remain. Pure right-click and DODGE/WEAPON_INNATE types are not blocked.
+3. `mixin/InvincibleComboMixin` injects the typed overload
+   `ComboBasicAttack.executeOnServer(SkillContainer, ComboType, int, long)` HEAD.
+   This is needed because Invincible's own `SkillContainerMixin.requestCasting`
+   bypasses Epic Fight's normal SKILL_CAST_EVENT. Only types containing a left-bound
+   key are canceled. The client reports its four-key mouse-left binding mask with
+   the current session, since the server has no access to client key bindings.
+   The mask cannot select DODGE/WEAPON_INNATE. It is input metadata, not an anti-cheat
+   guarantee for a modified client. Custom skills that bypass this overload and
+   execute nodes directly are outside this hook.
+
+The two Invincible mixins use a separate config with `required: false` and
+`defaultRequire: 0`. Missing target classes can be skipped, and missing injection
+methods do not fail the required-injection count. This is the simplest optional-hook
+setup; the Epic Fight config keeps its original strict behavior. If an Invincible
+update prevents these hooks from applying, left-click with an Invincible weapon may
+still execute its combo while Jing Guang Pan is active. Check startup warnings and
+retest after updates. These settings do not guarantee compatibility with arbitrary
+changes to Invincible APIs called directly by Java, and cannot bypass the mandatory
+dependency check when the entire mod is absent.
+
+Every mixin is a no-op while the skill is off. Forge mouse-left press interception
+replaces vanilla hits/block breaking; server AttackEntityEvent/BreakEvent also reject
+the vanilla paths. No global attack suppression, other-skill cancellation, or blanket
+Invincible cache reset is installed. Previously running unrelated attacks are not
+retroactively canceled. Client classes/mixins are loaded only on the physical client.
+
+### Animation, mirror and timing
+
+- Right: `bhspellsx:biped/spells/judgement_cut` (trimmed to source frames 0–30).
+- Left: `bhspellsx:biped/spells/judgement_cut_left`.
+- Both are non-looping BIPED StaticAnimation, speed 1.05, zero transition,
+  COMPOSITE_LAYER / HIGHEST, no mask. Their full pose replaces lower-priority living
+  motion, including creative flight. Input playback uses `playAnimationInstantly`
+  to begin frame zero without spending a tick in LinkAnimation. Other animations at
+  the same/higher priority can still interrupt; no movement/camera state is locked.
+- Run `python tools/mirror_judgement_cut.py` from any directory. It exchanges all
+  eight `_R`/`_L` pairs: Thigh, Leg, Knee, Shoulder, Arm, Hand, Tool and Elbow; the four
+  central joints stay named Root, Torso, Chest and Head. Each row-major 4x4 matrix is
+  reflected as `S M S`, with `S=diag(-1,1,1,1)`. Translation X changes sign; the
+  rotation's XY/XZ/YX/ZX terms change sign (rotation about Y/Z reverses). Reflection
+  is across the character's YZ plane. Epic Fight's Blender-to-Minecraft root Rx(-90)
+  leaves X unchanged and commutes with S. Swapping joint bases alone or only negating
+  translation would be wrong. The script checks double reflection and never writes
+  the original; timestamps, scales and duration are preserved.
+- First click/right, then alternate left/right at each accepted client restart.
+  Natural end or disabling resets the next attack to right without resetting wave
+  spacing. Prediction uses a client tick clock, last start and predicted wave release,
+  never accessor elapsed time: an interrupted/missing accessor cannot bypass the cut.
+  Both clips keep frames 0–30 exactly, including Root, and last 0.5/1.05 seconds
+  (~9.52 ticks). The left clip is regenerated with the existing mirror script.
+  The live natural LayerOffAnimation is adjusted to 4 ticks, blending to current
+  lower-layer flight/idle. EF resolves its real animation to EMPTY, so this fade
+  advances at 1x. No delayed stop is scheduled; a newer slash cannot be stopped by
+  the old fade. This works for rendered observers and continues after disabling.
+- Tunables in `JingGuangPanConstants`: speed **1.05**; release **2 ticks**; cut
+  **5 ticks**; buffer **4 ticks**, capacity one; range **7 blocks**; travel speed
+  **2.8 blocks/tick**; shared swept crescent hitbox (Phase 3 below); damage **4** using
+  **bhspells:gold_spell_bypass**; boost **4 blocks / 12 ticks**; clip end **frame 30**
+  (changing this requires resource trimming and mirror regeneration); blend out
+  **4 ticks**; glide downward cap **0.12 blocks/tick**. Phase 3 replaces vanilla dust.
+  Datapack tunables: activation threshold **2 mana**, debit **2/20 ticks**, watchdog
+  **1 tick**, cooldown **0**. Both sides use identical cut/release/buffer values.
+- Timing references: Minecraft recording `20260926-0433-00.0765780.mp4` around
+  **3.43–3.60 s** for the swing; EFN source release frame **6/60/1.05 = 0.095 s**
+  and recovery frame **19/60/1.05 = 0.302 s** motivate the rounded 2/6 tick values.
+  These are historical references; the user's post-test 5-tick cut and frame-30 trim
+  supersede the original 6-tick cut and 213-frame clip. Wanderer reference
+  `20260926-0451-40.7340320.mp4`, **0.1–0.6 s**, suggests about half a body height;
+  **1 block over 4 ticks** was the initial approximation, now superseded by the
+  user's **4 blocks over 12 ticks** decision.
+  Its **2–6 s** sequence is cadence reference only. Glide/particle settings are
+  engineering starting values, not measured VFX. Both mirrors retain identical timing.
+
+### Flight, wave and lifecycle behavior
+
+Activation runs the same anchored smoothstep curve on both sides:
+`height * (3*u*u - 2*u*u*u)`, with `u = tick / duration`. Height and duration are
+constants. Absolute Y targets prevent double addition when client movement packets
+arrive; X/Z and look remain unchanged. Both sides sweep the player's bounds against
+ceilings (16 binary-search iterations if obstructed) and stop the remaining boost
+on collision. Session-scoped start/stop packets and one final server position
+correction replace per-step teleport handshakes. Client interpolation supplies
+between-tick motion. Java waits for Apoli's `mayfly` grant before setting `flying`
+once; no velocity impulse is used. Disabling turns flying off but does not strip
+`mayfly` from other sources.
+Glide clamps only downward velocity on both sides, resets fallDistance and cancels
+LivingFallEvent through the landing tick. Ground (`onGround`, matching origins:on_block),
+water/bubbles, climbable blocks, reactivation and dimension change end it; no
+action_on_land dependency. Death/logout/respawn/dimension change clear the tag/session.
+Datapack removal also clears its tag. Physics under the full Epic Fight pack still
+requires in-game verification.
+
+Each eligible click starts a predicted visual and sends session + monotonic sequence.
+Ineligible clicks do not play or alternate; only one click within the four pre-cut
+ticks is buffered. Both sides share `readyAt` for cut/release spacing.
+Server checks active state, rejects old/duplicate requests, allows only one pending
+release and enforces at least 5 ticks between waves. It has no input buffer or lag
+compensation. A rejected network request can leave a predicted visual without a wave;
+the server replies with a retry delay, which resets logical combo state only for the
+current session/latest prediction and never stops the already shown pose. Older replies
+cannot roll back newer predictions. No positive acknowledgement or caster playback
+echo is required. Observers receive accepted animations. Protocol is now **2**, so
+both sides must use the updated jar.
+Disabling clears the client buffer and pending server release but lets the current
+visual finish. Already emitted waves finish their travel; dimension changes discard
+old-dimension waves.
+
+The wave is a server-only continuously swept cube, **not an entity**. It starts at the
+actual eye/hitbox position, takes yaw/pitch at release, and travels 2.8 blocks/tick.
+Entity bounds and every block collision-shape box are expanded by 0.3 for the same
+swept-volume test. The nearest block wins ties; the first living target other than
+the caster stops the wave. Its leading face never crosses the plane 7 blocks along
+the aim: center travel subtracts the cube's directional half-extent, so increasing
+size does not grant extra range. Dust is sampled at at most 0.2-block spacing.
+Damage is **4, bhspells:gold_spell_bypass**, with caster attribution, no Spell Power
+or weapon scaling. Deployed bhspells 1.3.0 already includes this type in
+`minecraft:bypasses_cooldown`; no damage-type files/tags are added here. Base sustained
+DPS is **16** at 20 TPS before armor, crits and external elemental modifiers.
+No attack phase, sound, trail or slash entity is added.
+
+The old occasional 8→12 has a matching external cause in deployed
+**ApothicAttributes-1.20.1-1.3.7.jar**: `AttributeEvents.apothCriticalStrike`
+handles LivingHurtEvent at HIGH priority, requires a living attacker, rolls its
+`attributeslib:crit_chance` (default 0.05), and multiplies by `crit_damage` (default 1.5).
+It sends the cyan APOTH_CRIT particles seen alongside the spike. There is no damage-type
+exclusion: both gold_magic and gold_spell_bypass qualify; new base 4 can become 6
+(12 after an external x2). Equipment/powers may change the actual attributes. This is
+a code-supported explanation, not a runtime event trace of the recording. Separately,
+bhspells FireBodyHitEvent applies x1.5 when FireBodyManager is active at level >=3;
+that state was not established in the clip. Neither multiplier is changed here.
+The original Root translation remains visual and can move the model outside F3+B;
+the mirror reverses that lateral offset. Do not use the rendered sword/model as the
+wave's collision origin.
+
+### One wave = one Iron's spell cast
+
+`JingGuangPanSpell` is INSTANT, level 1, RARE, school `bhspells:gold`, with zero
+base/per-level mana, power and cast time, and default cooldown 0. Fixed wave damage
+continues to use the existing vanilla DamageSource with `bhspells:gold_spell_bypass`;
+it does not switch to SpellDamageSource or apply Spell Power. `onCast` alone spawns
+one wave; the wave helper owns its live list and ticks at the same ServerTick END.
+The manager calls the registered spell at the existing 2-tick release deadline.
+Successful casts alone update lastWave. Failed casts send the existing rejection for
+the saved pending session/sequence, not the latest unrelated request.
+
+Only this spell overrides `attemptInitiateCast`. It rejects if MagicData is already
+casting, without canceling or changing that cast. Otherwise it checks canBeCastedBy
+and checkPreCastConditions, posts cancellable SpellPreCastEvent, and invokes Iron's
+castSpell synchronously with cooldown triggering disabled. castSpell still dispatches
+SpellOnCastEvent, onCast and OnClientCastPacket. It opens no casting state and sends
+no start/finish packets: the base initiation path would stop item use, cancel another
+cast, and queue even INSTANT spells until MagicManager's tick. No completion/reset
+callback is needed for a state never opened. Start animation is none, finish is pass,
+and both sounds are empty; the existing predicted Epic Fight pose is untouched.
+
+Both left-click release and `/cast @s bhspellsx:jing_guang_pan 1` use this override
+with CastSource.COMMAND (no Iron's mana consumption). The command works while the
+mode is off: one wave, no mode activation and no animation. The wave requires a
+ServerPlayer owner; unsupported non-player command targets fail the precondition.
+The command's return count is not proof of success because Iron's CastCommand ignores
+the boolean result for players. Direct server API callers receive the boolean.
+
+Traveloptics Blackout/Casting/Frozen Sight and Geomancy's Casting effect can reject
+through SpellPreCastEvent. Their own warning messages/sounds and held-item event
+reactions remain external behavior; no global suppression is added. Counterspell
+cannot interrupt this synchronous instant between ticks or erase a non-entity wave
+already emitted. No persistent casting state or recast is created. Left-click cut,
+buffer, prediction, alternating sides, flight/boost/glide and datapack mana are unchanged.
+
+### Required in-game checks
+
+Test empty hand and arbitrary held weapons; creative flight and camera turning during
+both full clips; right-left-right replay and reset after end/off; early ignored clicks,
+one buffered click, and restart at/after cut; mana drain/zero and off before the 2-tick
+release; no extra wave mana; ceiling-safe one-time boost; glide to ground/water/ladder,
+reactivate and change dimensions without fall damage; aim upward/downward, nearest
+living target vs wall, 7-block leading-face limit and bypass i-frame DPS; no adjacent incidental
+damage, sounds/trails/slash entities; F3+B model offset; two-client playback; Invincible
+left/compound-left blocked while right/dodge/other keys work, including rebound keys,
+then all normal input restored with skill off. Runtime tests are not replaced by build.
+
+
+### Jing Guang Pan - Phase 3, step 1: crescent wave VFX
+
+Own renderer; no additional dependency. Pibo/status ribbon is deferred. Animation,
+input prediction, cast timing, mana/flight/boost/glide and damage remain unchanged.
+`JingGuangPanSpell.castWave` carries the accepted left/right side through the synchronous
+Iron cast; direct `/cast` defaults to the right wave without playing an animation.
+
+- Shared `entity/spells/jing_guang_pan/JingGuangPanWaveShape.java`: 12 convex prisms,
+  radius 1.0, arc 150 degrees, maximum band width 0.22, depth 0.24, right/left roll
+  +22/-22 degrees. Ends taper to points. Renderer and continuous SAT collision use
+  the same vertices. Block voxel boxes and living-entity AABBs are swept against
+  actual prisms; enclosing AABB is only a broad phase. Earliest contact wins;
+  blocks win ties. Leading face stops at 7 blocks (anchor maximum 6.88).
+- `JingGuangPanWave.java` removes server dust and sends cumulative confirmed path
+  updates (normally three per wave) through `BHXNetwork.WavePath` to caster and
+  players tracking caster. Protocol is now 3: update both client and server jars.
+  Packets carry UUID, dimension, origin, direction, yaw, side, distance and end flag.
+- Portable client package `client/renderer/jing_guang_pan/`: `JingGuangPanVfx`,
+  `JingGuangPanWaveRenderer`, `JingGuangPanRenderTypes`, `JingGuangPanVfxConstants`.
+  Bootstrap callback is installed by `BHSpellsXClient` during client setup.
+  Replay only confirmed path, including when all packets arrive together, then fade
+  for 2 ticks; no extension of damage or travel. Clear on world change, discard
+  stale visuals after 20 ticks, cap at 256 waves, cull beyond 64 blocks.
+- Alpha body plus SRC_ALPHA/ONE additive flow/glow/sparks, depth tested, no depth
+  writes, double sided. Uses the existing Oculus-compatible entity translucent
+  emissive shader getter, NEW_ENTITY, full-bright and NO_OVERLAY; no custom shader
+  or shader mod required. Luminous geometry does not guarantee bloom or world light.
+  Actual Oculus/shaderpack appearance still requires in-game QA.
+- Body alpha 0.82, glow alpha 0.45 / width 3.2x, flow alpha 0.70 / width 1.7x,
+  scroll 0.025 U/tick, 8 sparks with half-size 0.025-0.055 blocks.
+- Textures in `assets/bhspellsx/textures/vfx/jing_guang_pan/`: `crescent_core.png`
+  1024x256, `energy_flow.png` 512x128, `soft_glow.png` 256x64, `spark.png` 64x64.
+  Straight RGBA, transparent transverse edges; flow/glow seamless along U.
+  Warm gold D8AE48, dark gold 98702B, cream FFF3CF, warm white FFFBEF, jade 83BDB3.
+  Dark gold preserves daylight contrast beneath luminous lines.
+- Regenerate with Python + numpy + Pillow: `python tools/generate_jing_guang_pan_vfx.py`.
+  Palette and procedural parameters live in the script. Reference previews (not game
+  screenshots): `tools/previews/jing_guang_pan/textures_dark_light.png` and
+  `waves_right_left.png`. Only four texture PNGs ship; script/previews stay outside jar.
+
+Validate without shaders and with Oculus: daylight/night, both slash directions,
+vertical aim, thin targets, block edges and empty crescent interior; nearest target
+only, range 7/speed 2.8/damage 4 gold_spell_bypass, two clients, short point-blank
+waves and batched packets. No impact effect or additional status VFX is introduced.
