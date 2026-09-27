@@ -26,7 +26,10 @@ public final class JingGuangPanHaloRenderer {
         Vec3 back=new Vec3(Math.sin(radians),0,-Math.cos(radians));
         Vec3 center=feet.add(0,CENTER_Y,0).add(back.scale(BODY_HALF_DEPTH+BACK_GAP));
         double rearDot=camera.subtract(center).normalize().dot(back);
-        double rear=smooth((rearDot-BACK_FADE_START_DOT)/(BACK_FADE_FULL_DOT-BACK_FADE_START_DOT));
+        // Only the owner needs rear-view attenuation to keep their own model readable.
+        // Observers retain the same inner-light passes/intensity as a front view.
+        boolean ownHalo=player==Minecraft.getInstance().player;
+        double rear=ownHalo ? smooth((rearDot-BACK_FADE_START_DOT)/(BACK_FADE_FULL_DOT-BACK_FADE_START_DOT)) : 0;
         double innerGain=1-(1-BACK_INNER_MIN)*rear;
         double age=visual.age(partial);
         float alpha=visual.alpha(partial);
@@ -38,7 +41,7 @@ public final class JingGuangPanHaloRenderer {
         try {
             p.translate(center.x-camera.x,center.y-camera.y,center.z-camera.z);
             p.mulPose(Axis.YP.rotationDegrees(-yaw)); p.scale((float)scale,(float)scale,(float)scale);
-            // Rear views keep only additive inner light: never place a dark translucent disc over the body.
+            // Owner rear views keep only additive inner light; observers keep both passes.
             plane(p,buffers.getBuffer(JingGuangPanHaloRenderTypes.get("halo_inner",false)),
                     (float)(INNER_ALPHA*innerGain*(1-rear))*alpha*pulse);
             buffers.endBatch(JingGuangPanHaloRenderTypes.get("halo_inner",false));

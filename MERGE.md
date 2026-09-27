@@ -1144,7 +1144,7 @@ client setup. Constants hold dimensions, opacity, timing, palette, mesh quality 
   using the wave RenderType factory (alpha/additive, depth test, no depth writes).
 - Open over 8 ticks: smooth alpha 0->1 and scale .85->1. Close fades over 8 ticks.
   Rays rotate 3 degrees/sec; brightness pulse +/-4% per 80 ticks. Twelve small sparks.
-- Rear inner light: smoothstep of camera-to-back dot from 0 to .85; minimum intensity .10.
+- Owner-only rear inner light: smoothstep of camera-to-back dot from 0 to .85; minimum intensity .10.
   Multiply the inner alpha-blended pass by (1-rearWeight), reaching ZERO at the rear.
   Keep only the inner additive pass at the rear, which cannot darken the player's colors.
   Ring, rays and sparks do not receive the rear fade. First-person self is fully hidden;
@@ -1192,3 +1192,14 @@ its alpha and additive compositing match the intended custom blend states, with 
 lighting and no near-range fog. It does not simulate shaderpack post-processing. No in-game
 screenshots were accessible in the request; conclusions are based on code/assets and the
 reported symptoms, not a claim of a verified in-game visual match.
+
+
+### Owner-only rear halo fade (2026-09-27)
+
+Rear fade applies only when the rendered halo's player is Minecraft's local player.
+The owner retains the existing 10% additive-only rear view, unchanged front view and
+first-person hiding. Observers always use the full front-view inner alpha/additive passes,
+regardless of viewing angle. Body-yaw orientation is unchanged; no full-halo billboard or
+60% rear setting existed in the checked clean working tree/history, so neither needed
+reverting. No network, texture or wave changes. Existing preview rear panels depict the
+owner's view, not the newly full-strength observer rear view.
