@@ -1203,3 +1203,20 @@ regardless of viewing angle. Body-yaw orientation is unchanged; no full-halo bil
 60% rear setting existed in the checked clean working tree/history, so neither needed
 reverting. No network, texture or wave changes. Existing preview rear panels depict the
 owner's view, not the newly full-strength observer rear view.
+
+
+### Full-body aura motes (2026-09-27)
+
+HaloRenderer draws a separate sparse set of additive camera-facing halo_spark quads around
+player feet/body, not around the halo center. They follow player position without body-yaw
+rotation and rise vertically at .006 blocks/tick with no outward velocity. UUID + seed 937,
+activation age, slot and lifetime cycle deterministically select positions/sizes client-side;
+no new packets or Minecraft particle registrations. Existing halo visibility, first-person,
+invisibility, activation/deactivation fades and 64-block draw limit apply to the entire aura.
+
+Tuning in HaloConstants: 10 slots nearby, 4 far away; remaining slots smoothly fade between
+24 and 40 blocks. Life 80 ticks; smooth fade-in/out 16 ticks each; size .025-.045 blocks;
+alpha .45; horizontal annulus .38-.70 blocks; initial height .05-1.60 above feet, rising up
+to another .48 blocks over the lifetime. Existing twelve halo sparks are unchanged. Client
+age synchronization uses the existing halo packet, so network delay can cause a small phase
+difference between clients; no per-mote network traffic is introduced.
