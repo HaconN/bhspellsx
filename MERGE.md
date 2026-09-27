@@ -1233,3 +1233,14 @@ Existing particles finish their vanilla lifetime after emission stops (toggle of
 or first-person switch); they are not renderer-owned and cannot instantly follow halo fading.
 AURA_PARTICLE_ID accepts parameterless SimpleParticleType replacements; RGB/options-based
 alternatives require their ParticleOptions too, not merely changing the ID.
+
+
+### Mixed aura rate adjustment (2026-09-28)
+
+Aura now emits minecraft:end_rod and bhspells:gold_sparkle independently, each with its
+own ID, interval (10 ticks) and burst count (1): 2/sec/type at 20 TPS. Shared initial outward
+velocity is .0025 and upward .006 blocks/tick. Both use the same existing client emission
+visibility gates and volume, with no extra packets. GoldSparkleParticle in bhspells 1.3.0
+accepts supplied initial velocity directly, then vanilla particle ticking applies its .05
+gravity and drag; it rises briefly and falls rather than maintaining the requested upward
+speed. Lifetime is 15-24 ticks. No physics override or workaround is introduced.
