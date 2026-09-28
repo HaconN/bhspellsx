@@ -1210,7 +1210,18 @@ maintaining the requested upward speed. Lifetime is 15-24 ticks. No physics over
 
 ### Jing Guang Pan chosen sounds (2026-09-28)
 
-Source credit: **[ที่มาเสียง]** (credit/link not supplied; fill before publication).
+Sound sources: the three packaged OGG files come from Pixabay under the Pixabay
+Content License (per the supplied source information: use in the mod is permitted,
+attribution is not required, and standalone redistribution or sale of the audio files
+is prohibited).
+
+- `skill1-1.mp3` -> `activate_1.ogg`: ["Hero Skill Attack Reveal 13" by freesound_gamestudio](https://pixabay.com/sound-effects/film-special-effects-hero-skill-attack-reveal-13-388903/).
+- `skill1-2.mp3` -> `activate_2.ogg`: ["Level Up Skill Upgrade (3)" by Yodguard](https://pixabay.com/sound-effects/film-special-effects-level-up-skill-upgrade-3-387910/).
+- `skill2.mp3` -> `wave.ogg`: ["Material Energy Hit" by freesound_gamestudio](https://pixabay.com/sound-effects/film-special-effects-material-energy-hit-394495/).
+
+`epicfight:entity.hit.blade` and `minecraft:block.beacon.deactivate` use existing
+mod/game sound events; no additional audio files for these events are packaged.
+
 User-provided asset/bai_long_lian/skill1-1.mp3 (2.088s), skill1-2.mp3 (8.04s), skill2.mp3
 (1.296s) converted to mono 48kHz Ogg Vorbis under sounds/jing_guang_pan/activate_1.ogg,
 activate_2.ogg and wave.ogg. No trimming or source-file edits. Register three events in
