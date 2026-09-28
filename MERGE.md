@@ -802,7 +802,7 @@ instead.)
 
 ---
 
-## Jing Guang Pan — เนตรชำระศักดิ์สิทธิ์ (bai_long_lian), Phase 2
+## Jing Guang Pan — เนตรชำระศักดิ์สิทธิ์ (净光判) — merge handover
 
 The gold toggle remains datapack-driven; each wave is now one Iron's instant cast,
 `bhspellsx:jing_guang_pan`, school `bhspells:gold`. The source datapack is `Origins/bai_long_lian`, origin `pers:bai_long_lian`. It owns the
@@ -810,7 +810,7 @@ The gold toggle remains datapack-driven; each wave is now one Iron's instant cas
 `pers_jing_guang_pan` is the server authority tag. Java sends explicit state/session
 packets to the caster; scoreboard tags are not assumed to synchronize to the client.
 The visible `active_self` power carries the verified Traveloptics `spectral_blink.png`
-icon, Thai TODO name/description and cooldown 0. The hidden `toggle` has no icon field.
+icon, final Thai name/description and cooldown 0. The hidden `toggle` has no icon field.
 The drain follows the existing snake pattern: Apoli can debit on the first eligible
 tick, not necessarily one full second after enabling. Minimum mana to enable is 2;
 the post-debit zero check disables immediately, with a 1-tick watchdog for external
@@ -850,7 +850,7 @@ mana depletion or Java removing the tag. No additional mana cost for a wave.
 - `tools/mirror_judgement_cut.py` is an authoring tool, never a packaged asset.
 - Technical instructions were moved byte-for-byte from `CLAUDE.md` to `AGENTS.md`;
   `CLAUDE.md` contains only `@AGENTS.md`. The existing deployment rule text is intact;
-  this task's explicit user authorization permits direct jar copies to both instances.
+  deployment requires the current task's explicit authorization.
 
 ### Input mixins and their scope
 
@@ -927,18 +927,7 @@ retroactively canceled. Client classes/mixins are loaded only on the physical cl
   (changing this requires resource trimming and mirror regeneration); blend out
   **4 ticks**; glide downward cap **0.12 blocks/tick**. Phase 3 replaces vanilla dust.
   Datapack tunables: activation threshold **2 mana**, debit **2/20 ticks**, watchdog
-  **1 tick**, cooldown **0**. Both sides use identical cut/release/buffer values.
-- Timing references: Minecraft recording `20260926-0433-00.0765780.mp4` around
-  **3.43–3.60 s** for the swing; EFN source release frame **6/60/1.05 = 0.095 s**
-  and recovery frame **19/60/1.05 = 0.302 s** motivate the rounded 2/6 tick values.
-  These are historical references; the user's post-test 5-tick cut and frame-30 trim
-  supersede the original 6-tick cut and 213-frame clip. Wanderer reference
-  `20260926-0451-40.7340320.mp4`, **0.1–0.6 s**, suggests about half a body height;
-  **1 block over 4 ticks** was the initial approximation, now superseded by the
-  user's **4 blocks over 12 ticks** decision.
-  Its **2–6 s** sequence is cadence reference only. Glide/particle settings are
-  engineering starting values, not measured VFX. Both mirrors retain identical timing.
-
+  **1 tick**, cooldown **0**. Client cut is 5 ticks; server minimum is 4 with the 1-tick tolerance. Release remains 2 ticks; only the client buffers.
 ### Flight, wave and lifecycle behavior
 
 Activation runs the same anchored smoothstep curve on both sides:
@@ -962,29 +951,28 @@ Each eligible click starts a predicted visual and sends session + monotonic sequ
 Ineligible clicks do not play or alternate; only one click within the four pre-cut
 ticks is buffered. Both sides share `readyAt` for cut/release spacing.
 Server checks active state, rejects old/duplicate requests, allows only one pending
-release and enforces at least 5 ticks between waves. It has no input buffer or lag
+release and enforces at least 4 ticks between waves (client cut 5 minus server tolerance 1). It has no input buffer or lag
 compensation. A rejected network request can leave a predicted visual without a wave;
 the server replies with a retry delay, which resets logical combo state only for the
 current session/latest prediction and never stops the already shown pose. Older replies
 cannot roll back newer predictions. No positive acknowledgement or caster playback
-echo is required. Observers receive accepted animations. Protocol is now **2**, so
+echo is required. Observers receive accepted animations. Protocol is **6**, so
 both sides must use the updated jar.
 Disabling clears the client buffer and pending server release but lets the current
 visual finish. Already emitted waves finish their travel; dimension changes discard
 old-dimension waves.
 
-The wave is a server-only continuously swept cube, **not an entity**. It starts at the
-actual eye/hitbox position, takes yaw/pitch at release, and travels 2.8 blocks/tick.
-Entity bounds and every block collision-shape box are expanded by 0.3 for the same
-swept-volume test. The nearest block wins ties; the first living target other than
-the caster stops the wave. Its leading face never crosses the plane 7 blocks along
-the aim: center travel subtracts the cube's directional half-extent, so increasing
-size does not grant extra range. Dust is sampled at at most 0.2-block spacing.
+The wave is a server-only swept set of 12 convex prisms, **not an entity**. It starts
+at the actual eye/hitbox position, samples yaw/pitch at release, and travels 2.8 blocks/tick.
+Shared geometry tests block collision shapes and living-entity AABBs, stopping at the
+first contact; blocks win ties. Range is 7 blocks measured at the leading edge, using
+WAVE_THICKNESS/2 (.11) to subtract the leading projection from maximum anchor travel. No vanilla
+dust remains. The client renderer replays the confirmed path without extending damage.
 Damage is **4, bhspells:gold_spell_bypass**, with caster attribution, no Spell Power
 or weapon scaling. Deployed bhspells 1.3.0 already includes this type in
 `minecraft:bypasses_cooldown`; no damage-type files/tags are added here. Base sustained
 DPS is **16** at 20 TPS before armor, crits and external elemental modifiers.
-No attack phase, sound, trail or slash entity is added.
+No animation attack phase or slash entity is added. Visual speed tails and selected sound cues are described below.
 
 The old occasional 8→12 has a matching external cause in deployed
 **ApothicAttributes-1.20.1-1.3.7.jar**: `AttributeEvents.apothCriticalStrike`
@@ -1043,28 +1031,28 @@ one buffered click, and restart at/after cut; mana drain/zero and off before the
 release; no extra wave mana; ceiling-safe one-time boost; glide to ground/water/ladder,
 reactivate and change dimensions without fall damage; aim upward/downward, nearest
 living target vs wall, 7-block leading-face limit and bypass i-frame DPS; no adjacent incidental
-damage, sounds/trails/slash entities; F3+B model offset; two-client playback; Invincible
+damage or slash entities; selected sound cues and visual-only tails; F3+B model offset; two-client playback; Invincible
 left/compound-left blocked while right/dodge/other keys work, including rebound keys,
 then all normal input restored with skill off. Runtime tests are not replaced by build.
 
 
 ### Jing Guang Pan - Phase 3, step 1: crescent wave VFX
 
-Own renderer; no additional dependency. Pibo/status ribbon is deferred. Animation,
+Own renderer; no additional dependency. The pibo plan is cancelled and replaced by the halo. Animation,
 input prediction, cast timing, mana/flight/boost/glide and damage remain unchanged.
 `JingGuangPanSpell.castWave` carries the accepted left/right side through the synchronous
 Iron cast; direct `/cast` defaults to the right wave without playing an animation.
 
 - Shared `entity/spells/jing_guang_pan/JingGuangPanWaveShape.java`: 12 convex prisms,
   radius 1.0, arc 150 degrees, maximum band width 0.22, depth 0.24, right/left roll
-  +22/-22 degrees. Ends taper to points. Renderer and continuous SAT collision use
+  -22/+22 degrees plus server jitter in [-4,+4). Ends taper to points. Renderer and continuous SAT collision use
   the same vertices. Block voxel boxes and living-entity AABBs are swept against
   actual prisms; enclosing AABB is only a broad phase. Earliest contact wins;
-  blocks win ties. Leading face stops at 7 blocks (anchor maximum 6.88).
+  blocks win ties. Leading face stops at 7 blocks; anchor travel is derived from the shared shape.
 - `JingGuangPanWave.java` removes server dust and sends cumulative confirmed path
   updates (normally three per wave) through `BHXNetwork.WavePath` to caster and
-  players tracking caster. Protocol is now 3: update both client and server jars.
-  Packets carry UUID, dimension, origin, direction, yaw, side, distance and end flag.
+  players tracking caster. Protocol is 6: update both client and server jars.
+  Packets carry UUID, dimension, origin, direction, yaw, side, final roll, distance and end flag.
 - Portable client package `client/renderer/jing_guang_pan/`: `JingGuangPanVfx`,
   `JingGuangPanWaveRenderer`, `JingGuangPanRenderTypes`, `JingGuangPanVfxConstants`.
   Bootstrap callback is installed by `BHSpellsXClient` during client setup.
@@ -1076,10 +1064,14 @@ Iron cast; direct `/cast` defaults to the right wave without playing an animatio
   emissive shader getter, NEW_ENTITY, full-bright and NO_OVERLAY; no custom shader
   or shader mod required. Luminous geometry does not guarantee bloom or world light.
   Actual Oculus/shaderpack appearance still requires in-game QA.
-- Body alpha 0.82, glow alpha 0.45 / width 3.2x, flow alpha 0.70 / width 1.7x,
-  scroll 0.025 U/tick, 8 sparks with half-size 0.025-0.055 blocks.
+- Body alpha .82, glow alpha .14 / width 1.8x, flow alpha .50 / width 1.25x,
+  scroll .025 U/tick, 8 sparks with half-size .045-.075 blocks. Render mesh has 72
+  segments versus 12 collision prisms. Core draws upper/lower surfaces; blade depth .24,
+  radial band .22 with sin(pi*t)^.7 taper; tip alpha fade covers 14% at each end.
+  A camera-facing leading-edge ribbon (.065 width, .9 alpha) and 3 short visual tails
+  (.9 length, .045 width, .38 alpha) improve edge-on visibility without changing collision.
 - Textures in `assets/bhspellsx/textures/vfx/jing_guang_pan/`: `crescent_core.png`
-  1024x256, `energy_flow.png` 512x128, `soft_glow.png` 256x64, `spark.png` 64x64.
+  512x128, `energy_flow.png` 512x128, `soft_glow.png` 256x64, `spark.png` 64x64.
   Straight RGBA, transparent transverse edges; flow/glow seamless along U.
   Warm gold D8AE48, dark gold 98702B, cream FFF3CF, warm white FFFBEF, jade 83BDB3.
   Dark gold preserves daylight contrast beneath luminous lines.
@@ -1091,19 +1083,16 @@ Iron cast; direct `/cast` defaults to the right wave without playing an animatio
 Validate without shaders and with Oculus: daylight/night, both slash directions,
 vertical aim, thin targets, block edges and empty crescent interior; nearest target
 only, range 7/speed 2.8/damage 4 gold_spell_bypass, two clients, short point-blank
-waves and batched packets. No impact effect or additional status VFX is introduced.
+waves and batched packets. No impact VFX is introduced; the status halo is described below.
 
 
-## Jing Guang Pan: wave roll and dummy rendering investigation (2026-09-27)
+### Wave roll and dummy rendering compatibility
 
 - Base roll: right **-22 degrees**, left **+22 degrees**. `WAVE_ROLL_JITTER_DEGREES = 4.0`
   adds a uniform offset in [-4, +4) degrees, sampled once per wave on the server.
   The final `rollDegrees` double drives server swept-prism geometry and is sent in every
   WavePath update. Clients construct the same geometry from it without resampling.
   `/cast` without animation uses the right-side default plus the same jitter.
-- Protocol **3 -> 5** adds a roll double after the side flag. Version 4 belonged to the
-  reverted owner-UUID experiment and is not reused. Server and clients need this build.
-  Damage, range, speed, timing and renderer drawing code are unchanged.
 - **Dummy compatibility warning (user's in-game test):** hitting MmmMmmMmmMmm's dummy,
   even with a prior bare-hand hit, makes waves displaced/north-only on the attacker's
   screen, while an observer sees correct positions. Test wave appearance against mobs
@@ -1131,7 +1120,7 @@ waves and batched packets. No impact effect or additional status VFX is introduc
   of that build; mathematical coordinate tests do not validate the in-game render pipeline.
 
 
-## Jing Guang Pan halo (Phase 3 step 2, 2026-09-27)
+### Halo renderer and status synchronization
 
 The halo replaces the cancelled pibo/ribbon plan. It is visual-only and follows interpolated
 player position/body yaw, upright in world Y; it never follows Epic Fight chest joints.
@@ -1141,7 +1130,7 @@ client setup. Constants hold dimensions, opacity, timing, palette, mesh quality 
 
 - Center 1.75 blocks above feet, diameter 1.65, back gap .30 beyond body half-depth .125.
   Ray plane radius 1.23; rim tube radius .018. Render AFTER_ENTITIES, before particles,
-  using the wave RenderType factory (alpha/additive, depth test, no depth writes).
+  using its own HaloRenderTypes factory (alpha/additive, depth test, no depth writes).
 - Open over 8 ticks: smooth alpha 0->1 and scale .85->1. Close fades over 8 ticks.
   Rays rotate 3 degrees/sec; brightness pulse +/-4% per 80 ticks. Twelve small sparks.
 - Owner-only rear inner light: smoothstep of camera-to-back dot from 0 to .85; minimum intensity .10.
@@ -1149,7 +1138,7 @@ client setup. Constants hold dimensions, opacity, timing, palette, mesh quality 
   Keep only the inner additive pass at the rear, which cannot darken the player's colors.
   Ring, rays and sparks do not receive the rear fade. First-person self is fully hidden;
   isInvisible hides immediately (including teammates), with no fade or position leak.
-- Protocol **5 -> 6**, separate Halo packet id 7: player UUID, dimension, monotonically
+- Protocol **6**, separate Halo packet id 7: player UUID, dimension, monotonically
   increasing server revision, activation age, active flag and immediate-clear flag.
   State transitions go to tracking players and self. StartTracking sends active snapshots;
   StopTracking clears that viewer. Existing clear paths broadcast immediate removal on
@@ -1199,27 +1188,8 @@ reported symptoms, not a claim of a verified in-game visual match.
 Rear fade applies only when the rendered halo's player is Minecraft's local player.
 The owner retains the existing 10% additive-only rear view, unchanged front view and
 first-person hiding. Observers always use the full front-view inner alpha/additive passes,
-regardless of viewing angle. Body-yaw orientation is unchanged; no full-halo billboard or
-60% rear setting existed in the checked clean working tree/history, so neither needed
-reverting. No network, texture or wave changes. Existing preview rear panels depict the
+regardless of viewing angle. Body-yaw orientation is unchanged. Existing preview rear panels depict the
 owner's view, not the newly full-strength observer rear view.
-
-
-### Full-body aura motes (2026-09-27)
-
-HaloRenderer draws a separate sparse set of additive camera-facing halo_spark quads around
-player feet/body, not around the halo center. They follow player position without body-yaw
-rotation and rise vertically at .006 blocks/tick with no outward velocity. UUID + seed 937,
-activation age, slot and lifetime cycle deterministically select positions/sizes client-side;
-no new packets or Minecraft particle registrations. Existing halo visibility, first-person,
-invisibility, activation/deactivation fades and 64-block draw limit apply to the entire aura.
-
-Tuning in HaloConstants: 10 slots nearby, 4 far away; remaining slots smoothly fade between
-24 and 40 blocks. Life 80 ticks; smooth fade-in/out 16 ticks each; size .025-.045 blocks;
-alpha .45; horizontal annulus .38-.70 blocks; initial height .05-1.60 above feet, rising up
-to another .48 blocks over the lifetime. Existing twelve halo sparks are unchanged. Client
-age synchronization uses the existing halo packet, so network delay can cause a small phase
-difference between clients; no per-mote network traffic is introduced.
 
 
 ### Current aura: gold sparkle only (2026-09-28)
@@ -1240,6 +1210,7 @@ maintaining the requested upward speed. Lifetime is 15-24 ticks. No physics over
 
 ### Jing Guang Pan chosen sounds (2026-09-28)
 
+Source credit: **[ที่มาเสียง]** (credit/link not supplied; fill before publication).
 User-provided asset/bai_long_lian/skill1-1.mp3 (2.088s), skill1-2.mp3 (8.04s), skill2.mp3
 (1.296s) converted to mono 48kHz Ogg Vorbis under sounds/jing_guang_pan/activate_1.ogg,
 activate_2.ogg and wave.ogg. No trimming or source-file edits. Register three events in
@@ -1257,3 +1228,91 @@ ServerLevel.playSound uses the PLAYERS category and vanilla network delivery to 
 nearby players; no client prediction double-play or protocol change. Full clips play to
 completion; toggling off does not stop the previous activation tail. In-game sound balance
 and rapid-fire overlap still need listening tests with mobs/players (not the target dummy).
+
+### Complete Jing Guang Pan handover file inventory
+
+Paths below are relative to bhspellsx. Shared wiring files contain other spells: merge
+only the Jing Guang Pan entries, do not overwrite the destination mod's registries.
+Rename Java package/resource namespace bhspellsx to bhspells consistently when integrating;
+retain external pers, epicfight, minecraft and existing bhspells references.
+
+- `AGENTS.md`
+- `CLAUDE.md`
+- `MERGE.md`
+- `build.gradle`
+- `src/main/java/net/offkung/bhspellsx/BHSpellsX.java`
+- `src/main/java/net/offkung/bhspellsx/BHSpellsXClient.java`
+- `src/main/java/net/offkung/bhspellsx/client/JingGuangPanClient.java`
+- `src/main/java/net/offkung/bhspellsx/client/renderer/jing_guang_pan/JingGuangPanHaloConstants.java`
+- `src/main/java/net/offkung/bhspellsx/client/renderer/jing_guang_pan/JingGuangPanHaloRenderTypes.java`
+- `src/main/java/net/offkung/bhspellsx/client/renderer/jing_guang_pan/JingGuangPanHaloRenderer.java`
+- `src/main/java/net/offkung/bhspellsx/client/renderer/jing_guang_pan/JingGuangPanHaloVfx.java`
+- `src/main/java/net/offkung/bhspellsx/client/renderer/jing_guang_pan/JingGuangPanRenderTypes.java`
+- `src/main/java/net/offkung/bhspellsx/client/renderer/jing_guang_pan/JingGuangPanVfx.java`
+- `src/main/java/net/offkung/bhspellsx/client/renderer/jing_guang_pan/JingGuangPanVfxConstants.java`
+- `src/main/java/net/offkung/bhspellsx/client/renderer/jing_guang_pan/JingGuangPanWaveRenderer.java`
+- `src/main/java/net/offkung/bhspellsx/entity/spells/jing_guang_pan/JingGuangPanCombos.java`
+- `src/main/java/net/offkung/bhspellsx/entity/spells/jing_guang_pan/JingGuangPanConstants.java`
+- `src/main/java/net/offkung/bhspellsx/entity/spells/jing_guang_pan/JingGuangPanManager.java`
+- `src/main/java/net/offkung/bhspellsx/entity/spells/jing_guang_pan/JingGuangPanPrediction.java`
+- `src/main/java/net/offkung/bhspellsx/entity/spells/jing_guang_pan/JingGuangPanSounds.java`
+- `src/main/java/net/offkung/bhspellsx/entity/spells/jing_guang_pan/JingGuangPanWave.java`
+- `src/main/java/net/offkung/bhspellsx/entity/spells/jing_guang_pan/JingGuangPanWaveShape.java`
+- `src/main/java/net/offkung/bhspellsx/event/JingGuangPanEvents.java`
+- `src/main/java/net/offkung/bhspellsx/mixin/InvincibleComboMixin.java`
+- `src/main/java/net/offkung/bhspellsx/mixin/client/EpicFightInputMixin.java`
+- `src/main/java/net/offkung/bhspellsx/mixin/client/InvincibleInputMixin.java`
+- `src/main/java/net/offkung/bhspellsx/network/BHXNetwork.java`
+- `src/main/java/net/offkung/bhspellsx/registry/BHXAnimationRegistry.java`
+- `src/main/java/net/offkung/bhspellsx/registry/BHXSoundRegistry.java`
+- `src/main/java/net/offkung/bhspellsx/registry/BHXSpellRegistry.java`
+- `src/main/java/net/offkung/bhspellsx/spells/gold/JingGuangPanSpell.java`
+- `src/main/resources/META-INF/mods.toml`
+- `src/main/resources/assets/bhspellsx/animmodels/animations/biped/spells/data/judgement_cut.json`
+- `src/main/resources/assets/bhspellsx/animmodels/animations/biped/spells/data/judgement_cut_left.json`
+- `src/main/resources/assets/bhspellsx/animmodels/animations/biped/spells/judgement_cut.json`
+- `src/main/resources/assets/bhspellsx/animmodels/animations/biped/spells/judgement_cut_left.json`
+- `src/main/resources/assets/bhspellsx/lang/en_us.json`
+- `src/main/resources/assets/bhspellsx/sounds.json`
+- `src/main/resources/assets/bhspellsx/sounds/jing_guang_pan/activate_1.ogg`
+- `src/main/resources/assets/bhspellsx/sounds/jing_guang_pan/activate_2.ogg`
+- `src/main/resources/assets/bhspellsx/sounds/jing_guang_pan/wave.ogg`
+- `src/main/resources/assets/bhspellsx/textures/gui/spell_icons/jing_guang_pan.png`
+- `src/main/resources/assets/bhspellsx/textures/vfx/jing_guang_pan/crescent_core.png`
+- `src/main/resources/assets/bhspellsx/textures/vfx/jing_guang_pan/energy_flow.png`
+- `src/main/resources/assets/bhspellsx/textures/vfx/jing_guang_pan/halo_inner.png`
+- `src/main/resources/assets/bhspellsx/textures/vfx/jing_guang_pan/halo_rays.png`
+- `src/main/resources/assets/bhspellsx/textures/vfx/jing_guang_pan/halo_ring.png`
+- `src/main/resources/assets/bhspellsx/textures/vfx/jing_guang_pan/halo_spark.png`
+- `src/main/resources/assets/bhspellsx/textures/vfx/jing_guang_pan/soft_glow.png`
+- `src/main/resources/assets/bhspellsx/textures/vfx/jing_guang_pan/spark.png`
+- `src/main/resources/bhspellsx.invincible.mixins.json`
+- `src/main/resources/bhspellsx.mixins.json`
+- `tools/generate_jing_guang_pan_halo.py`
+- `tools/generate_jing_guang_pan_vfx.py`
+- `tools/mirror_judgement_cut.py`
+
+Authoring-only previews: tools/previews/jing_guang_pan/ and
+tools/previews/jing_guang_pan_halo/. Do not package tools, previews, tests or libs.
+The right keyframe originated from EFN's
+assets/efn/animmodels/animations/biped/yamato/dmcyamato_judgementcut.json; only its
+keyframe was copied, then trimmed to frames 0-30. The two local assets/.../data metadata
+files are our own layer/priority settings, not EFN trail_effects data.
+
+### Team tuning locations
+
+- Damage 4, damage type gold_spell_bypass, range 7, wave speed 2.8, client cut 5 ticks,
+  server tolerance 1 tick (minimum 4), release 2 and buffer 4: JingGuangPanConstants.java.
+- Boost 4 blocks/12 ticks and glide .12: same constants file.
+- Mana/โซล 2 per 20 ticks: source Origins/bai_long_lian/data/pers/powers/bai_long_lian/active_i/
+  jing_guang_pan_drain.json (debit + interval); jing_guang_pan_skill.json (minimum to enable);
+  jing_guang_pan_watch.json (external depletion watchdog). Change related thresholds together.
+- Wave visual settings: JingGuangPanVfxConstants.java; halo/aura: JingGuangPanHaloConstants.java;
+  palette/texture generation: the two tools/generate_jing_guang_pan_*.py scripts.
+- Sound volume/pitch: JingGuangPanSounds.java. Iron's default cooldown/mana 0: JingGuangPanSpell.java.
+
+Datapack origin is pers:bai_long_lian. Supply its zip separately; the IT lead must ADD this
+origin to the live server's shared origin layer without replacing existing entries.
+The deliverable contains no origin_layers and no README. Client/server mod versions must
+match protocol 6. Use mobs/players, never Dummmmmmy, for VFX validation; occasional x1.5
+spell damage is Apothic Attributes critical damage (default 5%), not a skill defect.
